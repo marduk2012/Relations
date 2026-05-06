@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 740 420" width="740" height="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+  <!-- Page background (simulates Obsidian reading mode) -->
+  <rect width="740" height="420" fill="#1e1e1e"/>
+
+  <!-- Body text on left -->
+  <g font-family="-apple-system, 'Segoe UI', sans-serif" fill="#dcddde">
+    <text x="30" y="55" font-size="22" font-weight="700">King Arthur</text>
+    <line x1="30" y1="68" x2="430" y2="68" stroke="#363636" stroke-width="1"/>
+    <text x="30" y="100" font-size="13">High King of Britain, wielder of</text>
+    <text x="30" y="120" font-size="13">Excalibur, and founder of the Round</text>
+    <text x="30" y="140" font-size="13">Table.</text>
+    <text x="30" y="180" font-size="13">The infobox to the right shows</text>
+    <text x="30" y="200" font-size="13">Arthur's direct relationships in mini</text>
+    <text x="30" y="220" font-size="13" fill="#7f6df2">mode (auto-detected because the</text>
+    <text x="30" y="240" font-size="13" fill="#7f6df2">block is inside a callout).</text>
+
+    <text x="30" y="290" font-size="16" font-weight="600">Direct relationships</text>
+    <line x1="30" y1="298" x2="430" y2="298" stroke="#363636" stroke-width="1"/>
+  </g>
+
+  <!-- Floated infobox callout on right -->
+  <g>
+    <rect x="470" y="30" width="240" height="370" rx="6" fill="#252628" stroke="#363636" stroke-width="1"/>
+
+    <!-- Header -->
+    <text x="590" y="55" text-anchor="middle" font-size="14" font-weight="700" fill="#dcddde">King Arthur</text>
+    <line x1="490" y1="68" x2="690" y2="68" stroke="#363636" stroke-width="0.5"/>
+
+    <!-- Portrait placeholder (large circle with crown) -->
+    <circle cx="590" cy="125" r="44" fill="#3a5a7d" stroke="#363636" stroke-width="2"/>
+    <path d="M563,105 L573,89 L583,101 L590,87 L597,101 L607,89 L617,105 L617,114 L563,114 Z" fill="#fbbf24" stroke="#92400e" stroke-width="0.8"/>
+
+    <!-- Stats heading -->
+    <text x="490" y="195" font-size="11" font-weight="600" fill="#9899a3" letter-spacing="0.05em">STATS</text>
+    <line x1="490" y1="200" x2="690" y2="200" stroke="#363636" stroke-width="0.5"/>
+
+    <!-- Stats table -->
+    <g font-size="11" fill="#dcddde">
+      <text x="490" y="217">Title</text>
+      <text x="690" y="217" text-anchor="end">High King</text>
+      <line x1="490" y1="222" x2="690" y2="222" stroke="#2a2b2d" stroke-width="0.5"/>
+      <text x="490" y="237">Realm</text>
+      <text x="690" y="237" text-anchor="end">Britain</text>
+      <line x1="490" y1="242" x2="690" y2="242" stroke="#2a2b2d" stroke-width="0.5"/>
+      <text x="490" y="257">Reign</text>
+      <text x="690" y="257" text-anchor="end">Camelot</text>
+      <line x1="490" y1="262" x2="690" y2="262" stroke="#2a2b2d" stroke-width="0.5"/>
+      <text x="490" y="277">Weapon</text>
+      <text x="690" y="277" text-anchor="end">Excalibur</text>
+    </g>
+
+    <!-- Relationships heading -->
+    <text x="490" y="305" font-size="11" font-weight="600" fill="#9899a3" letter-spacing="0.05em">RELATIONSHIPS</text>
+    <line x1="490" y1="310" x2="690" y2="310" stroke="#363636" stroke-width="0.5"/>
+
+    <!-- Mini graph area: small Arthur (highlighted) with direct neighbours around it -->
+    <g transform="translate(490, 320)">
+      <!-- edges first -->
+      <line x1="100" y1="40" x2="40" y2="20" stroke="#a78bfa" stroke-width="1.7" stroke-dasharray="1.5 4"/>
+      <line x1="100" y1="40" x2="160" y2="20" stroke="#4ade80" stroke-width="1.7"/>
+      <!-- spouse double -->
+      <line x1="115" y1="38" x2="180" y2="50" stroke="#ec4899" stroke-width="1"/>
+      <line x1="115" y1="42" x2="180" y2="54" stroke="#ec4899" stroke-width="1"/>
+      <!-- enemies -->
+      <line x1="100" y1="48" x2="40" y2="65" stroke="#ef4444" stroke-width="1.7"/>
+      <line x1="105" y1="50" x2="160" y2="68" stroke="#ef4444" stroke-width="1.7"/>
+
+      <!-- Arthur center, highlighted -->
+      <circle cx="100" cy="40" r="16" fill="#3a5a7d" stroke="#7f6df2" stroke-width="2.5"/>
+      <path d="M89,30 L93,24 L97,28 L100,22 L103,28 L107,24 L111,30 L111,33 L89,33 Z" fill="#fbbf24" stroke="#92400e" stroke-width="0.4"/>
+      <rect x="83" y="59" width="34" height="13" rx="3" fill="#0e0f12" stroke="#363636" stroke-width="0.4"/>
+      <text x="100" y="68" text-anchor="middle" font-size="9" font-weight="600" fill="#dcddde">Arthur</text>
+
+      <!-- Merlin (mentor) -->
+      <circle cx="35" cy="20" r="11" fill="#5a447c" stroke="#363636" stroke-width="1.2"/>
+      <path d="M28,18 L35,5 L42,18 Z" fill="#a78bfa" stroke="#312e81" stroke-width="0.4"/>
+      <rect x="20" y="33" width="30" height="12" rx="3" fill="#0e0f12" stroke="#363636" stroke-width="0.4"/>
+      <text x="35" y="42" text-anchor="middle" font-size="9" font-weight="600" fill="#dcddde">Merlin</text>
+
+      <!-- Lancelot (ally) -->
+      <circle cx="165" cy="20" r="11" fill="#4a6275" stroke="#363636" stroke-width="1.2"/>
+      <path d="M158,24 Q158,16 165,16 Q172,16 172,24 L172,28 L158,28 Z" fill="#94a3b8"/>
+      <rect x="148" y="33" width="36" height="12" rx="3" fill="#0e0f12" stroke="#363636" stroke-width="0.4"/>
+      <text x="166" y="42" text-anchor="middle" font-size="9" font-weight="600" fill="#dcddde">Lancelot</text>
+
+      <!-- Guinevere (spouse) -->
+      <circle cx="190" cy="55" r="11" fill="#7c3a5a" stroke="#363636" stroke-width="1.2"/>
+      <path d="M183,53 Q183,46 190,45 Q197,46 197,53 L196,62 L184,62 Z" fill="#fbbf24" opacity="0.85"/>
+      <rect x="170" y="68" width="42" height="12" rx="3" fill="#0e0f12" stroke="#363636" stroke-width="0.4"/>
+      <text x="191" y="77" text-anchor="middle" font-size="9" font-weight="600" fill="#dcddde">Guinevere</text>
+
+      <!-- Mordred (enemy) -->
+      <circle cx="35" cy="65" r="11" fill="#7a3535" stroke="#363636" stroke-width="1.2"/>
+      <path d="M28,68 Q28,60 35,60 Q42,60 42,68 L42,72 L28,72 Z" fill="#7f1d1d"/>
+      <rect x="17" y="78" width="36" height="12" rx="3" fill="#0e0f12" stroke="#363636" stroke-width="0.4"/>
+      <text x="35" y="87" text-anchor="middle" font-size="9" font-weight="600" fill="#dcddde">Mordred</text>
+
+      <!-- Morgana (enemy) -->
+      <circle cx="166" cy="70" r="11" fill="#7d4738" stroke="#363636" stroke-width="1.2"/>
+      <path d="M159,68 Q159,61 166,60 Q173,61 173,68 L172,76 L160,76 Z" fill="#7c3aed" opacity="0.85"/>
+      <rect x="148" y="83" width="36" height="12" rx="3" fill="#0e0f12" stroke="#363636" stroke-width="0.4"/>
+      <text x="166" y="92" text-anchor="middle" font-size="9" font-weight="600" fill="#dcddde">Morgana</text>
+    </g>
+  </g>
+</svg>
