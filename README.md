@@ -85,6 +85,9 @@ depth: 1
 ```
 ````
 
+> [!TIP]
+> Don't want to type the fences? Open the command palette and run **Insert relations code block** to drop a bare block at the cursor, or **Insert relations code block (with all options)** to get every option pre-filled as commented-out lines you can selectively enable.
+
 > [!NOTE]
 > ` ```npc-graph ` works too as a legacy alias if you have older notes from before the rename.
 

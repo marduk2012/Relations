@@ -1,218 +1,333 @@
-# Relations
+/* === side-panel view === */
+.relations-root {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	width: 100%;
+}
 
-Visualise the relationships between any set of notes in your Obsidian vault. Useful for **worldbuilding** (cities, factions, organisations), **fiction writing** (story casts, dramatis personae), **TTRPG campaigns** (NPC webs, allegiances, family trees), **historical research** (genealogies, political networks), or any project where you want to *see* how your notes connect to each other.
+.relations-toolbar {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	padding: 6px 10px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+}
 
-Note-driven: every entity is a regular note, relationships live in frontmatter as configurable typed properties, portraits load from a frontmatter image property, and graphs can be embedded inline in any note via fenced code blocks (including inside callouts and infoboxes).
+.relations-toolbar button {
+	padding: 4px 10px;
+	font-size: 12px;
+}
 
-## Quick start
+.relations-mode-toggle {
+	display: inline-flex;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 5px;
+	overflow: hidden;
+}
 
-Add a portrait and some relationships to any note:
+.relations-mode-toggle button {
+	border: none;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	padding: 4px 10px;
+	font-size: 12px;
+	cursor: pointer;
+	box-shadow: none;
+	border-radius: 0;
+}
 
-```yaml
----
-npcimage: "[[merlin-portrait.png]]"
-ally:
-  - "[[Arthur]]"
-spouse: "[[Nimue]]"
-mentor:
-  - "[[Arthur]]"
-family:
-  - "[[Morgana]]"
----
+.relations-mode-toggle button.is-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
 
-# Merlin
+/* Standalone toolbar buttons (Family tree, Refresh, Fit) — use is-active for the toggleable ones. */
+.relations-toolbar button.is-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
 
-The court magician of Camelot…
-```
+.relations-depth-wrap {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	color: var(--text-muted);
+}
 
-Open the graph from the **users** ribbon icon (left sidebar) or the command palette (`Open Relations graph`). Click any portrait to open that note. Right-click for *open in tab* / *open in pane*.
+.relations-depth-wrap input[type="number"] {
+	width: 50px;
+	padding: 2px 4px;
+	font-size: 12px;
+}
 
-## Two graph modes
+.relations-subtitle {
+	padding: 4px 12px;
+	font-size: 11px;
+	color: var(--text-muted);
+	border-bottom: 1px solid var(--background-modifier-border);
+	flex: 0 0 auto;
+}
 
-The view has a **Full** / **Active note** toggle in the toolbar.
+.relations-canvas {
+	flex: 1 1 auto;
+	width: 100%;
+	min-height: 200px;
+	position: relative;
+	background: var(--background-primary);
+}
 
-- **Full** — every connected note in the vault and how they connect.
-- **Active note** — the currently open note plus everyone within N hops. The depth control next to the toggle (1–6) decides how far to reach. Default is set in plugin settings.
+.relations-empty {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	max-width: 360px;
+	text-align: center;
+	color: var(--text-muted);
+	padding: 14px 18px;
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-secondary);
+	font-size: 13px;
+	line-height: 1.5;
+}
 
-## Embedding a graph in a note
+.relations-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	padding: 8px 12px;
+	border-top: 1px solid var(--background-modifier-border);
+	font-size: 12px;
+	color: var(--text-muted);
+	flex: 0 0 auto;
+}
 
-Use a fenced code block with the `relations` language tag:
+.relations-legend.is-hidden { display: none; }
 
-````markdown
-```relations
-size: small
-depth: 1
-```
-````
+.relations-legend-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
 
-(`npc-graph` works too as a legacy alias if you have older notes.)
+.relations-legend-swatch {
+	display: inline-block;
+	width: 18px;
+	height: 4px;
+	border-radius: 2px;
+	background-color: var(--swatch-color, #888);
+	position: relative;
+}
 
-Inside the block:
+/* Dashed swatch — small dashes, transparent background, top border carries the dashes. */
+.relations-legend-swatch.is-dashed {
+	background-color: transparent;
+	height: 0;
+	border-top: 3px dashed var(--swatch-color, #888);
+	margin-top: 4px;
+	margin-bottom: 4px;
+	border-radius: 0;
+}
 
-| Option        | Default        | Notes                                                                          |
-|---------------|----------------|--------------------------------------------------------------------------------|
-| `size`        | `small`        | `mini` (~160px tall, infobox-friendly), `small` (~320px), or `large` (~600px) |
-| `depth`       | size-dependent | hops from the focus note. `mini` is forced to 1, `small` defaults to 1, `large` defaults to 3 |
-| `scope`       | `local`        | `local` (this note + N hops) or `full` (entire vault)                          |
-| `tree`        | `false`        | force generic top-down dagre layout                                            |
-| `family-tree` | `false`        | proper family-tree layout: bloodline edges build generations, spouses are paired, children sit under their parents' midpoint |
-| `zoom`        | `1.0` / `1.4` for mini | zoom multiplier applied after fit. `1.5` or `"150%"` zoom in 50%; `0.8` zoom out 20%. Mini graphs default to `1.4` so they fill the small canvas |
-| `height`      | size default   | override the embed's height. Accepts pixels (`800` or `"800px"`), `em`, `rem`, `vh`, `vw`, or `%` |
-| `center`      | host note      | wikilink or path of a different note to focus on, e.g. `"[[King Arthur]]"`     |
+.relations-legend-swatch.is-dotted {
+	background-color: transparent;
+	height: 0;
+	border-top: 3px dotted var(--swatch-color, #888);
+	margin-top: 4px;
+	margin-bottom: 4px;
+	border-radius: 0;
+}
 
-Examples — small inline view of direct relationships:
+/* Double-line swatch: top + bottom borders, transparent middle. */
+.relations-legend-swatch.is-double {
+	background-color: transparent;
+	height: 4px;
+	border-top: 1.5px solid var(--swatch-color, #888);
+	border-bottom: 1.5px solid var(--swatch-color, #888);
+	border-radius: 0;
+}
 
-````markdown
-```relations
-size: small
-depth: 1
-```
-````
+/* === embedded code blocks ===
+   IMPORTANT: explicit width AND height — Cytoscape needs concrete dimensions when it
+   mounts. Using `display: flex` with column direction ensures the canvas takes most
+   space and the optional legend strip slots in below it without breaking layout.
 
-Large family-tree view three hops out, laid out top-down:
+   Float behaviour: we deliberately do NOT set `clear: both`. ITS infoboxes use
+   `float: right` (or left) and the typical user intent is for the graph to flow in
+   the column *next to* the floated infobox — heading on the left, infobox on the
+   right, graph filling the leftover column. Letting the embed wrap naturally is the
+   right behaviour.
 
-````markdown
-```relations
-size: large
-depth: 3
-family-tree: true
-```
-````
+   The `min-width` safeguard handles the edge case where the floated infobox is so
+   wide there's almost no room left — in that case browsers automatically push the
+   embed below the float rather than rendering it in a tiny squashed column.
 
-Whole-vault graph embedded in a note:
+   `contain: layout` makes the embed a block formatting context, which prevents
+   neighbouring floats from intruding into its margin or padding. */
+.relations-embed {
+	display: flex;
+	flex-direction: column;
+	position: relative;
+	width: auto;
+	min-width: 280px;
+	contain: layout;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-primary);
+	overflow: hidden;
+	margin: 10px 0;
+	box-sizing: border-box;
+}
 
-````markdown
-```relations
-size: large
-scope: full
-```
-````
+.relations-embed.is-mini {
+	height: 160px;
+	min-height: 160px;
+}
 
-Code blocks render lazily — they only initialise when scrolled into view, so a note with several embedded graphs won't slow Obsidian on open.
+.relations-embed.is-small {
+	height: 320px;
+	min-height: 320px;
+}
 
-## Embedding inside callouts and infoboxes
+.relations-embed.is-large {
+	height: 600px;
+	min-height: 600px;
+}
 
-The `relations` block works inside Obsidian callouts, including the popular **ITS Theme** infobox and any other callout-based wrapper. When the plugin detects it's rendering inside a callout, it auto-switches to a compact "mini" rendering — smaller portraits, tighter layout, no border, transparent background — so the graph integrates with the callout's chrome instead of competing with it.
+/* Inside any callout (ITS infobox, fas-infobox, plain callouts, etc.) the wrapper's
+   own border, background, and margin would compete with the callout's chrome. Strip
+   them, and tighten the margin so the block doesn't push surrounding callout content
+   around. */
+.relations-embed.in-callout {
+	border: none;
+	background: transparent;
+	margin: 4px 0;
+	border-radius: 4px;
+}
 
-Example, inside an ITS infobox:
+/* In an infobox callout the column is narrow — small/large here would overflow.
+   Force these down to a sensible column-friendly height. The user can still get more
+   space by setting an explicit size: large outside the callout. */
+.relations-embed.in-callout.is-mini {
+	height: 140px;
+	min-height: 140px;
+}
+.relations-embed.in-callout.is-small {
+	height: 220px;
+	min-height: 220px;
+}
+.relations-embed.in-callout.is-large {
+	height: 320px;
+	min-height: 320px;
+}
 
-````markdown
-> [!infobox|left]
-> # Merlin
-> ![[merlin.png|cover hsmall]]
-> ###### Relationships
-> ```relations
-> ```
-````
+.relations-embed-canvas {
+	display: block;
+	width: 100%;
+	flex: 1 1 auto;
+	min-height: 0;
+	position: relative;
+}
 
-The empty block is fine — defaults give you the host note's direct neighbours at mini size. You can still force a different size explicitly with `size: small` or `size: large` if you want; explicit sizes override the auto-detect. Mini mode forces `depth: 1` regardless of what the YAML says, since deeper hops aren't legible at that scale.
+/* Legend inside an embed — slimmer than the side-panel legend. */
+.relations-embed > .relations-legend {
+	flex: 0 0 auto;
+	padding: 6px 10px;
+	font-size: 11px;
+	gap: 10px;
+	border-top: 1px solid var(--background-modifier-border);
+}
 
-## Family-tree mode
+.relations-embed.in-callout > .relations-legend {
+	border-top: 1px dashed var(--background-modifier-border);
+	padding: 4px 6px;
+	font-size: 10px;
+}
 
-A dedicated layout for genealogy-heavy graphs. Triggered by:
-- `family-tree: true` in any code block, or
-- the **Family tree** toggle button in the side-panel toolbar
+.relations-embed .relations-empty {
+	font-size: 12px;
+	max-width: 280px;
+}
 
-The layout works in three steps:
+.relations-embed.is-mini .relations-empty {
+	font-size: 11px;
+	max-width: 200px;
+	padding: 8px 10px;
+}
 
-1. **Bloodline edges build generations.** Any relationship type with **Gen** checked in settings counts as a bloodline. By default only `parent` is gen-flagged. The plugin runs a top-down layout using *only* these edges, so generations stack horizontally.
-2. **Spouses pair side-by-side.** Any relationship with **Pair** checked (default: `spouse`) pulls partners onto the same horizontal line, placed adjacent to each other.
-3. **Children sit under the midpoint** of their parents' positions. Siblings are then spread evenly across the available space.
+/* === settings table === */
+.relations-types-header,
+.relations-types-row {
+	display: grid;
+	grid-template-columns: 1fr 50px 50px 50px 50px 50px 90px 32px;
+	gap: 8px;
+	align-items: center;
+	padding: 4px 0;
+}
 
-To get good results you'll want to declare bloodlines with **directed `parent`** edges:
+.relations-types-header {
+	font-size: 11px;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	border-bottom: 1px solid var(--background-modifier-border);
+	padding-bottom: 6px;
+	margin-bottom: 4px;
+}
 
-```yaml
----
-# Aegon's note
-parent:
-  - "[[Uther]]"
-  - "[[Igraine]]"
-spouse:
-  - "[[Rhaenys]]"
----
-```
+.relations-types-header-cell { text-align: center; }
+.relations-types-header-name { text-align: left; }
 
-A few honest limitations:
-- **Sibling order isn't deterministic.** Without explicit metadata the layout picks an order that minimises edge crossings, not birth order.
-- **Multiple marriages get awkward.** A person with two distinct spouses will have one placed adjacent and the other floating somewhere reachable. Real genealogy tools draw the person twice; we don't.
-- **It's a force-directed library doing tree work.** Visually it lands closer to a UML diagram than a sketched parchment chart — structurally correct, aesthetically simpler.
+.relations-types-name {
+	width: 100%;
+	padding: 4px 8px;
+	font-size: 13px;
+}
 
-## Relationship types
+.relations-types-color {
+	width: 40px;
+	height: 24px;
+	padding: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	cursor: pointer;
+	background: transparent;
+	justify-self: center;
+}
 
-Configure types in **Settings → Relations**. Each type has:
+.relations-types-cb { justify-self: center; }
 
-- **Name** — the frontmatter property name. Add a property with this name to any note to declare the relationship.
-- **Color** — edge colour in the graph and the legend swatch.
-- **Sym** (symmetric) — if on, declaring on either side creates the relationship both ways. Off = one-way (drawn with an arrow).
-- **Pair** — pulls the two nodes very close, with a heavier straight line connecting them. Use for spouse / partner / bonded pairs.
-- **Tree** — when this type dominates the visible graph (≥60% of edges), the layout switches to top-down dagre. Use for family / parent / lineage so it looks like a family tree instead of a force blob.
-- **Gen** — genealogy: this type counts as a bloodline edge in family-tree mode. Typically `parent`. Used to build generations and child-under-midpoint placement.
-- **Line** — `solid` (default), `dashed`, `dotted`, or `double`. Useful for marking "secret", "former", "rumored" or otherwise different-flavored relationships. Add a separate type like `secret-ally` with the dashed style rather than overloading `ally`.
+.relations-types-linestyle {
+	width: 100%;
+	padding: 3px 4px;
+	font-size: 12px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+}
 
-Defaults shipped:
+.relations-types-remove {
+	background: transparent;
+	border: none;
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: 14px;
+	padding: 2px 6px;
+	box-shadow: none;
+}
 
-| Name    | Sym | Pair | Tree | Gen | Line    |
-|---------|-----|------|------|-----|---------|
-| ally    | ✓   |      |      |     | solid   |
-| enemy   | ✓   |      |      |     | solid   |
-| family  | ✓   |      | ✓    |     | solid   |
-| friend  | ✓   |      |      |     | solid   |
-| rival   | ✓   |      |      |     | dashed  |
-| spouse  | ✓   | ✓    |      |     | double  |
-| lover   | ✓   |      |      |     | dashed  |
-| mentor  |     |      |      |     | dotted  |
-| parent  |     |      | ✓    | ✓   | solid   |
+.relations-types-remove:hover { color: var(--text-error); }
 
-You can rename, recolour, add, or delete these freely — they're just defaults.
-
-## Portraits
-
-The portrait property name is configurable in settings (default: `npcimage`, kept for backward compatibility — feel free to change it to `image` or whatever fits your vault). Accepted forms:
-
-```yaml
-npcimage: "[[merlin.png]]"                     # vault wikilink (recommended)
-npcimage: "Assets/Portraits/merlin.png"        # vault path
-npcimage: "https://example.com/merlin.png"     # external URL
-```
-
-The plugin uses Obsidian's resource path resolution, so vault images load even if your vault isn't web-served.
-
-## Including notes in the graph
-
-By default, any note with at least one configured relationship property qualifies. Notes pointed at by another note's relationship are pulled in too. For stricter scoping, set **Folder scope** or **Required tags** in settings — useful if you only want characters from `World/People/` to appear, or only notes tagged `#character`.
-
-## Frontmatter formats accepted
-
-For any relationship property:
-
-```yaml
-ally: "[[Bob]]"                     # single
-ally: ["[[Bob]]", "[[Alice]]"]      # YAML inline list
-ally:                               # YAML block list
-  - "[[Bob]]"
-  - "[[Alice]]"
-ally: "[[Bob]], [[Alice]]"          # comma-separated
-```
-
-Aliases (`[[Bob|Bobby]]`) and headings (`[[Bob#background]]`) are normalised to the file link.
-
-## Building from source
-
-```bash
-npm install
-npm run build
-```
-
-Then copy `main.js`, `manifest.json`, and `styles.css` into `<vault>/.obsidian/plugins/relations/` and enable the plugin.
-
-## Future ideas
-
-- Filter chips by relationship type / tag inside the graph
-- Edit relationships directly from the graph (right-click → add ally)
-- Per-relationship metadata (notes, strength) via richer frontmatter
-- Group/cluster by faction tag
-- Export graph as PNG/SVG
-
-## License
-
-MIT — see [LICENSE](./LICENSE).
+.relations-help-pre {
+	background: var(--background-secondary);
+	padding: 10px;
+	border-radius: 4px;
+	font-size: 12px;
+	overflow-x: auto;
+}
