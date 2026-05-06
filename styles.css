@@ -1,0 +1,218 @@
+# Relations
+
+Visualise the relationships between any set of notes in your Obsidian vault. Useful for **worldbuilding** (cities, factions, organisations), **fiction writing** (story casts, dramatis personae), **TTRPG campaigns** (NPC webs, allegiances, family trees), **historical research** (genealogies, political networks), or any project where you want to *see* how your notes connect to each other.
+
+Note-driven: every entity is a regular note, relationships live in frontmatter as configurable typed properties, portraits load from a frontmatter image property, and graphs can be embedded inline in any note via fenced code blocks (including inside callouts and infoboxes).
+
+## Quick start
+
+Add a portrait and some relationships to any note:
+
+```yaml
+---
+npcimage: "[[merlin-portrait.png]]"
+ally:
+  - "[[Arthur]]"
+spouse: "[[Nimue]]"
+mentor:
+  - "[[Arthur]]"
+family:
+  - "[[Morgana]]"
+---
+
+# Merlin
+
+The court magician of Camelot…
+```
+
+Open the graph from the **users** ribbon icon (left sidebar) or the command palette (`Open Relations graph`). Click any portrait to open that note. Right-click for *open in tab* / *open in pane*.
+
+## Two graph modes
+
+The view has a **Full** / **Active note** toggle in the toolbar.
+
+- **Full** — every connected note in the vault and how they connect.
+- **Active note** — the currently open note plus everyone within N hops. The depth control next to the toggle (1–6) decides how far to reach. Default is set in plugin settings.
+
+## Embedding a graph in a note
+
+Use a fenced code block with the `relations` language tag:
+
+````markdown
+```relations
+size: small
+depth: 1
+```
+````
+
+(`npc-graph` works too as a legacy alias if you have older notes.)
+
+Inside the block:
+
+| Option        | Default        | Notes                                                                          |
+|---------------|----------------|--------------------------------------------------------------------------------|
+| `size`        | `small`        | `mini` (~160px tall, infobox-friendly), `small` (~320px), or `large` (~600px) |
+| `depth`       | size-dependent | hops from the focus note. `mini` is forced to 1, `small` defaults to 1, `large` defaults to 3 |
+| `scope`       | `local`        | `local` (this note + N hops) or `full` (entire vault)                          |
+| `tree`        | `false`        | force generic top-down dagre layout                                            |
+| `family-tree` | `false`        | proper family-tree layout: bloodline edges build generations, spouses are paired, children sit under their parents' midpoint |
+| `zoom`        | `1.0` / `1.4` for mini | zoom multiplier applied after fit. `1.5` or `"150%"` zoom in 50%; `0.8` zoom out 20%. Mini graphs default to `1.4` so they fill the small canvas |
+| `height`      | size default   | override the embed's height. Accepts pixels (`800` or `"800px"`), `em`, `rem`, `vh`, `vw`, or `%` |
+| `center`      | host note      | wikilink or path of a different note to focus on, e.g. `"[[King Arthur]]"`     |
+
+Examples — small inline view of direct relationships:
+
+````markdown
+```relations
+size: small
+depth: 1
+```
+````
+
+Large family-tree view three hops out, laid out top-down:
+
+````markdown
+```relations
+size: large
+depth: 3
+family-tree: true
+```
+````
+
+Whole-vault graph embedded in a note:
+
+````markdown
+```relations
+size: large
+scope: full
+```
+````
+
+Code blocks render lazily — they only initialise when scrolled into view, so a note with several embedded graphs won't slow Obsidian on open.
+
+## Embedding inside callouts and infoboxes
+
+The `relations` block works inside Obsidian callouts, including the popular **ITS Theme** infobox and any other callout-based wrapper. When the plugin detects it's rendering inside a callout, it auto-switches to a compact "mini" rendering — smaller portraits, tighter layout, no border, transparent background — so the graph integrates with the callout's chrome instead of competing with it.
+
+Example, inside an ITS infobox:
+
+````markdown
+> [!infobox|left]
+> # Merlin
+> ![[merlin.png|cover hsmall]]
+> ###### Relationships
+> ```relations
+> ```
+````
+
+The empty block is fine — defaults give you the host note's direct neighbours at mini size. You can still force a different size explicitly with `size: small` or `size: large` if you want; explicit sizes override the auto-detect. Mini mode forces `depth: 1` regardless of what the YAML says, since deeper hops aren't legible at that scale.
+
+## Family-tree mode
+
+A dedicated layout for genealogy-heavy graphs. Triggered by:
+- `family-tree: true` in any code block, or
+- the **Family tree** toggle button in the side-panel toolbar
+
+The layout works in three steps:
+
+1. **Bloodline edges build generations.** Any relationship type with **Gen** checked in settings counts as a bloodline. By default only `parent` is gen-flagged. The plugin runs a top-down layout using *only* these edges, so generations stack horizontally.
+2. **Spouses pair side-by-side.** Any relationship with **Pair** checked (default: `spouse`) pulls partners onto the same horizontal line, placed adjacent to each other.
+3. **Children sit under the midpoint** of their parents' positions. Siblings are then spread evenly across the available space.
+
+To get good results you'll want to declare bloodlines with **directed `parent`** edges:
+
+```yaml
+---
+# Aegon's note
+parent:
+  - "[[Uther]]"
+  - "[[Igraine]]"
+spouse:
+  - "[[Rhaenys]]"
+---
+```
+
+A few honest limitations:
+- **Sibling order isn't deterministic.** Without explicit metadata the layout picks an order that minimises edge crossings, not birth order.
+- **Multiple marriages get awkward.** A person with two distinct spouses will have one placed adjacent and the other floating somewhere reachable. Real genealogy tools draw the person twice; we don't.
+- **It's a force-directed library doing tree work.** Visually it lands closer to a UML diagram than a sketched parchment chart — structurally correct, aesthetically simpler.
+
+## Relationship types
+
+Configure types in **Settings → Relations**. Each type has:
+
+- **Name** — the frontmatter property name. Add a property with this name to any note to declare the relationship.
+- **Color** — edge colour in the graph and the legend swatch.
+- **Sym** (symmetric) — if on, declaring on either side creates the relationship both ways. Off = one-way (drawn with an arrow).
+- **Pair** — pulls the two nodes very close, with a heavier straight line connecting them. Use for spouse / partner / bonded pairs.
+- **Tree** — when this type dominates the visible graph (≥60% of edges), the layout switches to top-down dagre. Use for family / parent / lineage so it looks like a family tree instead of a force blob.
+- **Gen** — genealogy: this type counts as a bloodline edge in family-tree mode. Typically `parent`. Used to build generations and child-under-midpoint placement.
+- **Line** — `solid` (default), `dashed`, `dotted`, or `double`. Useful for marking "secret", "former", "rumored" or otherwise different-flavored relationships. Add a separate type like `secret-ally` with the dashed style rather than overloading `ally`.
+
+Defaults shipped:
+
+| Name    | Sym | Pair | Tree | Gen | Line    |
+|---------|-----|------|------|-----|---------|
+| ally    | ✓   |      |      |     | solid   |
+| enemy   | ✓   |      |      |     | solid   |
+| family  | ✓   |      | ✓    |     | solid   |
+| friend  | ✓   |      |      |     | solid   |
+| rival   | ✓   |      |      |     | dashed  |
+| spouse  | ✓   | ✓    |      |     | double  |
+| lover   | ✓   |      |      |     | dashed  |
+| mentor  |     |      |      |     | dotted  |
+| parent  |     |      | ✓    | ✓   | solid   |
+
+You can rename, recolour, add, or delete these freely — they're just defaults.
+
+## Portraits
+
+The portrait property name is configurable in settings (default: `npcimage`, kept for backward compatibility — feel free to change it to `image` or whatever fits your vault). Accepted forms:
+
+```yaml
+npcimage: "[[merlin.png]]"                     # vault wikilink (recommended)
+npcimage: "Assets/Portraits/merlin.png"        # vault path
+npcimage: "https://example.com/merlin.png"     # external URL
+```
+
+The plugin uses Obsidian's resource path resolution, so vault images load even if your vault isn't web-served.
+
+## Including notes in the graph
+
+By default, any note with at least one configured relationship property qualifies. Notes pointed at by another note's relationship are pulled in too. For stricter scoping, set **Folder scope** or **Required tags** in settings — useful if you only want characters from `World/People/` to appear, or only notes tagged `#character`.
+
+## Frontmatter formats accepted
+
+For any relationship property:
+
+```yaml
+ally: "[[Bob]]"                     # single
+ally: ["[[Bob]]", "[[Alice]]"]      # YAML inline list
+ally:                               # YAML block list
+  - "[[Bob]]"
+  - "[[Alice]]"
+ally: "[[Bob]], [[Alice]]"          # comma-separated
+```
+
+Aliases (`[[Bob|Bobby]]`) and headings (`[[Bob#background]]`) are normalised to the file link.
+
+## Building from source
+
+```bash
+npm install
+npm run build
+```
+
+Then copy `main.js`, `manifest.json`, and `styles.css` into `<vault>/.obsidian/plugins/relations/` and enable the plugin.
+
+## Future ideas
+
+- Filter chips by relationship type / tag inside the graph
+- Edit relationships directly from the graph (right-click → add ally)
+- Per-relationship metadata (notes, strength) via richer frontmatter
+- Group/cluster by faction tag
+- Export graph as PNG/SVG
+
+## License
+
+MIT — see [LICENSE](./LICENSE).

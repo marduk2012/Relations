@@ -1,0 +1,9 @@
+{
+  "id": "relations",
+  "name": "Relations",
+  "version": "0.6.0",
+  "minAppVersion": "1.4.0",
+  "description": "Visualise the relationships between any set of notes — NPC casts, family trees, factions, organisations, historical figures. Note-driven, with portraits, line styles, and embeddable graphs.",
+  "author": "You",
+  "isDesktopOnly": false
+}
