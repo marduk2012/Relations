@@ -5,42 +5,42 @@
   <!-- === EDGES (drawn first so nodes overlay) === -->
 
   <!-- Arthur ↔ Lancelot : ally, solid green -->
-  <path d="M460 230 Q380 150 280 130" stroke="#4ade80" stroke-width="2.5" fill="none" opacity="0.85"/>
+  <path d="M460 230 Q380 150 280 130" stroke="#22c55e" stroke-width="2.5" fill="none" opacity="0.85"/>
 
   <!-- Arthur ↔ Merlin : mentor (asymmetric, dotted purple) -->
-  <path d="M460 230 Q300 240 200 280" stroke="#a78bfa" stroke-width="2.5" fill="none" stroke-dasharray="2 6" opacity="0.85"/>
-  <polygon points="200,280 212,272 213,283" fill="#a78bfa"/>
+  <path d="M460 230 Q300 240 200 280" stroke="#8b5cf6" stroke-width="2.5" fill="none" stroke-dasharray="2 6" opacity="0.85"/>
+  <polygon points="200,280 212,272 213,283" fill="#8b5cf6"/>
 
   <!-- Arthur ↔ Morgana : enemy, solid red -->
-  <path d="M460 230 Q540 320 660 360" stroke="#ef4444" stroke-width="2.5" fill="none" opacity="0.85"/>
+  <path d="M460 230 Q540 320 660 360" stroke="#dc2626" stroke-width="2.5" fill="none" opacity="0.85"/>
 
   <!-- Arthur ↔ Mordred : enemy, solid red -->
-  <path d="M460 230 Q420 320 360 360" stroke="#ef4444" stroke-width="2.5" fill="none" opacity="0.85"/>
+  <path d="M460 230 Q420 320 360 360" stroke="#dc2626" stroke-width="2.5" fill="none" opacity="0.85"/>
 
   <!-- Lancelot ↔ Guinevere : lover, dashed pink -->
-  <path d="M280 130 Q440 100 600 230" stroke="#f472b6" stroke-width="2.5" fill="none" stroke-dasharray="8 4" opacity="0.85"/>
+  <path d="M280 130 Q440 100 600 230" stroke="#fb7185" stroke-width="2.5" fill="none" stroke-dasharray="8 4" opacity="0.85"/>
 
   <!-- Lancelot → Galahad : parent, solid amber, with arrow -->
-  <path d="M280 130 Q220 95 165 82" stroke="#fbbf24" stroke-width="2.5" fill="none" opacity="0.85"/>
-  <polygon points="160,80 172,75 170,86" fill="#fbbf24"/>
+  <path d="M280 130 Q220 95 165 82" stroke="#b45309" stroke-width="2.5" fill="none" opacity="0.85"/>
+  <polygon points="160,80 172,75 170,86" fill="#b45309"/>
 
   <!-- Arthur ↔ Gawain : ally, solid green -->
-  <path d="M460 230 Q620 150 760 120" stroke="#4ade80" stroke-width="2.5" fill="none" opacity="0.85"/>
+  <path d="M460 230 Q620 150 760 120" stroke="#22c55e" stroke-width="2.5" fill="none" opacity="0.85"/>
 
   <!-- Arthur ↔ Guinevere : spouse double-line. Drawn LAST so node circles cover endpoints cleanly. -->
-  <line x1="500" y1="227" x2="568" y2="227" stroke="#ec4899" stroke-width="1.5"/>
-  <line x1="500" y1="233" x2="568" y2="233" stroke="#ec4899" stroke-width="1.5"/>
+  <line x1="500" y1="227" x2="568" y2="227" stroke="#d946ef" stroke-width="1.5"/>
+  <line x1="500" y1="233" x2="568" y2="233" stroke="#d946ef" stroke-width="1.5"/>
 
   <!-- === NODES === -->
   <!-- Arthur (center, highlighted with bigger ring) -->
   <circle cx="460" cy="230" r="42" fill="#3a5a7d" stroke="#7f6df2" stroke-width="3.5"/>
-  <path d="M433,210 L443,196 L453,206 L460,194 L467,206 L477,196 L487,210 L487,217 L433,217 Z" fill="#fbbf24" stroke="#92400e" stroke-width="0.8"/>
+  <path d="M433,210 L443,196 L453,206 L460,194 L467,206 L477,196 L487,210 L487,217 L433,217 Z" fill="#b45309" stroke="#92400e" stroke-width="0.8"/>
   <rect x="430" y="282" width="60" height="20" rx="4" fill="#0e0f12" stroke="#363636" stroke-width="0.6"/>
   <text x="460" y="296" text-anchor="middle" font-size="13" font-weight="600" fill="#dcddde">Arthur</text>
 
   <!-- Guinevere -->
   <circle cx="600" cy="230" r="32" fill="#7c3a5a" stroke="#363636" stroke-width="2"/>
-  <path d="M580,225 Q580,210 600,208 Q620,210 620,225 L618,250 L582,250 Z" fill="#fbbf24" opacity="0.85"/>
+  <path d="M580,225 Q580,210 600,208 Q620,210 620,225 L618,250 L582,250 Z" fill="#b45309" opacity="0.85"/>
   <rect x="567" y="277" width="66" height="20" rx="4" fill="#0e0f12" stroke="#363636" stroke-width="0.6"/>
   <text x="600" y="291" text-anchor="middle" font-size="13" font-weight="600" fill="#dcddde">Guinevere</text>
 
@@ -58,7 +58,7 @@
 
   <!-- Merlin -->
   <circle cx="200" cy="280" r="32" fill="#5a447c" stroke="#363636" stroke-width="2"/>
-  <path d="M183,272 L200,243 L217,272 Z" fill="#a78bfa" stroke="#312e81" stroke-width="0.8"/>
+  <path d="M183,272 L200,243 L217,272 Z" fill="#8b5cf6" stroke="#312e81" stroke-width="0.8"/>
   <circle cx="200" cy="250" r="1.5" fill="#fde68a"/>
   <rect x="178" y="327" width="44" height="20" rx="4" fill="#0e0f12" stroke="#363636" stroke-width="0.6"/>
   <text x="200" y="341" text-anchor="middle" font-size="13" font-weight="600" fill="#dcddde">Merlin</text>
@@ -85,18 +85,18 @@
   <g transform="translate(20, 425)">
     <rect width="880" height="28" rx="4" fill="#0e0f12" fill-opacity="0.6"/>
     <g transform="translate(20, 16)" font-size="11" fill="#999999">
-      <rect x="0" y="-3" width="18" height="3" fill="#4ade80" rx="1.5"/>
+      <rect x="0" y="-3" width="18" height="3" fill="#22c55e" rx="1.5"/>
       <text x="24" y="3">ally</text>
-      <rect x="65" y="-3" width="18" height="3" fill="#ef4444" rx="1.5"/>
+      <rect x="65" y="-3" width="18" height="3" fill="#dc2626" rx="1.5"/>
       <text x="89" y="3">enemy</text>
-      <rect x="143" y="-3" width="18" height="3" fill="#fbbf24" rx="1.5"/>
+      <rect x="143" y="-3" width="18" height="3" fill="#b45309" rx="1.5"/>
       <text x="167" y="3">parent →</text>
-      <line x1="232" y1="-3.5" x2="250" y2="-3.5" stroke="#ec4899" stroke-width="1.5"/>
-      <line x1="232" y1="-0.5" x2="250" y2="-0.5" stroke="#ec4899" stroke-width="1.5"/>
+      <line x1="232" y1="-3.5" x2="250" y2="-3.5" stroke="#d946ef" stroke-width="1.5"/>
+      <line x1="232" y1="-0.5" x2="250" y2="-0.5" stroke="#d946ef" stroke-width="1.5"/>
       <text x="256" y="3">spouse ⚭</text>
-      <line x1="328" y1="-1.5" x2="346" y2="-1.5" stroke="#f472b6" stroke-width="3" stroke-dasharray="6 3"/>
+      <line x1="328" y1="-1.5" x2="346" y2="-1.5" stroke="#fb7185" stroke-width="3" stroke-dasharray="6 3"/>
       <text x="352" y="3">lover</text>
-      <line x1="395" y1="-1.5" x2="413" y2="-1.5" stroke="#a78bfa" stroke-width="3" stroke-dasharray="2 4"/>
+      <line x1="395" y1="-1.5" x2="413" y2="-1.5" stroke="#8b5cf6" stroke-width="3" stroke-dasharray="2 4"/>
       <text x="419" y="3">mentor →</text>
     </g>
   </g>

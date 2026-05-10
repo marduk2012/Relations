@@ -28,7 +28,7 @@
 
     <!-- Portrait placeholder (large circle with crown) -->
     <circle cx="590" cy="125" r="44" fill="#3a5a7d" stroke="#363636" stroke-width="2"/>
-    <path d="M563,105 L573,89 L583,101 L590,87 L597,101 L607,89 L617,105 L617,114 L563,114 Z" fill="#fbbf24" stroke="#92400e" stroke-width="0.8"/>
+    <path d="M563,105 L573,89 L583,101 L590,87 L597,101 L607,89 L617,105 L617,114 L563,114 Z" fill="#b45309" stroke="#92400e" stroke-width="0.8"/>
 
     <!-- Stats heading -->
     <text x="490" y="195" font-size="11" font-weight="600" fill="#9899a3" letter-spacing="0.05em">STATS</text>
@@ -56,24 +56,24 @@
     <!-- Mini graph area: small Arthur (highlighted) with direct neighbours around it -->
     <g transform="translate(490, 320)">
       <!-- edges first -->
-      <line x1="100" y1="40" x2="40" y2="20" stroke="#a78bfa" stroke-width="1.7" stroke-dasharray="1.5 4"/>
-      <line x1="100" y1="40" x2="160" y2="20" stroke="#4ade80" stroke-width="1.7"/>
+      <line x1="100" y1="40" x2="40" y2="20" stroke="#8b5cf6" stroke-width="1.7" stroke-dasharray="1.5 4"/>
+      <line x1="100" y1="40" x2="160" y2="20" stroke="#22c55e" stroke-width="1.7"/>
       <!-- spouse double -->
-      <line x1="115" y1="38" x2="180" y2="50" stroke="#ec4899" stroke-width="1"/>
-      <line x1="115" y1="42" x2="180" y2="54" stroke="#ec4899" stroke-width="1"/>
+      <line x1="115" y1="38" x2="180" y2="50" stroke="#d946ef" stroke-width="1"/>
+      <line x1="115" y1="42" x2="180" y2="54" stroke="#d946ef" stroke-width="1"/>
       <!-- enemies -->
-      <line x1="100" y1="48" x2="40" y2="65" stroke="#ef4444" stroke-width="1.7"/>
-      <line x1="105" y1="50" x2="160" y2="68" stroke="#ef4444" stroke-width="1.7"/>
+      <line x1="100" y1="48" x2="40" y2="65" stroke="#dc2626" stroke-width="1.7"/>
+      <line x1="105" y1="50" x2="160" y2="68" stroke="#dc2626" stroke-width="1.7"/>
 
       <!-- Arthur center, highlighted -->
       <circle cx="100" cy="40" r="16" fill="#3a5a7d" stroke="#7f6df2" stroke-width="2.5"/>
-      <path d="M89,30 L93,24 L97,28 L100,22 L103,28 L107,24 L111,30 L111,33 L89,33 Z" fill="#fbbf24" stroke="#92400e" stroke-width="0.4"/>
+      <path d="M89,30 L93,24 L97,28 L100,22 L103,28 L107,24 L111,30 L111,33 L89,33 Z" fill="#b45309" stroke="#92400e" stroke-width="0.4"/>
       <rect x="83" y="59" width="34" height="13" rx="3" fill="#0e0f12" stroke="#363636" stroke-width="0.4"/>
       <text x="100" y="68" text-anchor="middle" font-size="9" font-weight="600" fill="#dcddde">Arthur</text>
 
       <!-- Merlin (mentor) -->
       <circle cx="35" cy="20" r="11" fill="#5a447c" stroke="#363636" stroke-width="1.2"/>
-      <path d="M28,18 L35,5 L42,18 Z" fill="#a78bfa" stroke="#312e81" stroke-width="0.4"/>
+      <path d="M28,18 L35,5 L42,18 Z" fill="#8b5cf6" stroke="#312e81" stroke-width="0.4"/>
       <rect x="20" y="33" width="30" height="12" rx="3" fill="#0e0f12" stroke="#363636" stroke-width="0.4"/>
       <text x="35" y="42" text-anchor="middle" font-size="9" font-weight="600" fill="#dcddde">Merlin</text>
 
@@ -85,7 +85,7 @@
 
       <!-- Guinevere (spouse) -->
       <circle cx="190" cy="55" r="11" fill="#7c3a5a" stroke="#363636" stroke-width="1.2"/>
-      <path d="M183,53 Q183,46 190,45 Q197,46 197,53 L196,62 L184,62 Z" fill="#fbbf24" opacity="0.85"/>
+      <path d="M183,53 Q183,46 190,45 Q197,46 197,53 L196,62 L184,62 Z" fill="#b45309" opacity="0.85"/>
       <rect x="170" y="68" width="42" height="12" rx="3" fill="#0e0f12" stroke="#363636" stroke-width="0.4"/>
       <text x="191" y="77" text-anchor="middle" font-size="9" font-weight="600" fill="#dcddde">Guinevere</text>
 

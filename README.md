@@ -4,11 +4,11 @@
 
 **See how your notes connect.**
 
-Visualise relationships between notes — for **worldbuilding**, **fiction**, **TTRPG campaigns**, **genealogies**, or any project where seeing how things connect matters. Note-driven via frontmatter, with portraits, typed line styles, family-tree layout, and embeddable graphs that work inside callouts and infoboxes.
+Visualise relationships between notes — for **worldbuilding**, **fiction**, **TTRPG campaigns**, **genealogies**, or any project where seeing how things connect matters. Note-driven via frontmatter, with portraits, typed line styles, a focused family view, and embeddable graphs that work inside callouts and infoboxes.
 
 ![Relations graph preview](docs/preview-graph.png)
 
-[Install](#install) · [Quick start](#quick-start) · [Embedding](#embedding-a-graph-in-a-note) · [Family-tree mode](#family-tree-mode) · [Settings](#relationship-types)
+[Install](#install) · [Quick start](#quick-start) · [Embedding](#embedding-a-graph-in-a-note) · [Family-graph mode](#family-graph-mode) · [Settings](#relationship-types)
 
 </div>
 
@@ -116,46 +116,50 @@ The empty block uses sensible defaults — direct neighbours of the host note, m
 | `depth`       | size-dependent         | hops from the focus note. `mini` is forced to 1; `small` defaults to 1; `large` defaults to 3 |
 | `scope`       | `local`                | `local` (this note + N hops) or `full` (entire vault)                          |
 | `tree`        | `false`                | force generic top-down dagre layout                                            |
-| `family-tree` | `false`                | proper family-tree layout — see below                                           |
+| `family-graph`| `false`                | family view: parents above the focus, partners on the same row, children below. See below. |
 | `zoom`        | `1.0`, `1.4` for mini  | zoom multiplier applied after fit. `1.5` or `"150%"` zooms in 50%             |
 | `height`      | size default           | override the embed's height. Accepts `px`, `em`, `rem`, `vh`, `vw`, or `%`     |
 | `center`      | host note              | wikilink or path of a different note to focus on, e.g. `"[[King Arthur]]"`     |
 
-## Family-tree mode
+## Family-graph mode
 
-A dedicated layout for genealogy-heavy graphs. Bloodline edges build generations, spouses pair side-by-side, and children sit under their parents' midpoint.
-
-Triggered by `family-tree: true` in any code block, or the **Family tree** toggle button in the side-panel toolbar.
+A focused family view for the host note. Generations are aligned in horizontal rows — parents above, the focus and any partners on the middle row, children below — with edges styled to distinguish marriage from informal partnership and parent from child.
 
 ```yaml
-# Aegon's note
+# Arthur's note
 parent:
   - "[[Uther]]"
   - "[[Igraine]]"
 spouse:
-  - "[[Rhaenys]]"
+  - "[[Guinevere]]"
 ```
 
 ````markdown
 ```relations
 size: large
-family-tree: true
+family-graph: true
 ```
 ````
 
-<details>
-<summary><b>How the layout actually works</b> (click to expand)</summary>
+### What you'll see
 
-1. **Bloodline edges build generations.** Any relationship type with **Gen** checked in settings counts as a bloodline. By default only `parent` is gen-flagged. The plugin runs a top-down dagre layout using *only* these edges, so generations stack horizontally.
-2. **Spouses pair side-by-side.** Any relationship with **Pair** checked (default: `spouse`) pulls partners onto the same horizontal line.
-3. **Children sit under the midpoint** of their parents' positions. Siblings are then spread evenly across the available space.
+- **Solid line** between two people = declared marriage (any `pair`-flagged relationship like `spouse`)
+- **Dotted line** between two people = informal partnership — automatically inferred when two people share a child but have no declared marriage between them. You don't have to model this explicitly; just declare the child's parents, and a partnership line appears
+- **Arrowed line** = parent → child (genealogy edge), pointing in the natural reading direction
+- **Declared spouses go to the LEFT** of the focus, **informal partners to the RIGHT** — a deterministic visual convention so the chart reads the same way every time, regardless of which order Obsidian indexed the frontmatter
+- **Only family appears** — ancestors, descendants, partners. Allies, enemies, mentors, and other relationship types are hidden so the family structure reads cleanly. Switch to the regular Full or Active-note views to see those
 
-A few honest limitations:
-- **Sibling order isn't deterministic.** Without explicit metadata the layout picks an order that minimises edge crossings, not birth order.
-- **Multiple marriages get awkward.** A person with two distinct spouses will have one placed adjacent and the other floating somewhere reachable. Real genealogy tools draw the person twice; we don't.
-- **It's a force-directed library doing tree work.** Visually it lands closer to a UML diagram than a sketched parchment chart — structurally correct, aesthetically simpler.
+### Use `scope: full` to see everything
 
-</details>
+By default `family-graph` builds a neighbourhood around the active note. To show the whole vault's family in one view, add `scope: full`:
+
+````markdown
+```relations
+size: large
+family-graph: true
+scope: full
+```
+````
 
 ## Relationship types
 
@@ -166,22 +170,26 @@ Configure types in **Settings → Relations**. Each type has a name (= frontmatt
 | **Sym**      | Symmetric — declaring on either note creates the relationship both ways. Off = one-way (drawn with an arrow).           |
 | **Pair**     | Pulls paired nodes very close, with a heavy connector. Use for `spouse`, `partner`, `bonded`.                            |
 | **Tree**     | When this type dominates a graph (≥60% of edges), auto-switches to top-down layout.                                       |
-| **Gen**      | Genealogy — counts as a bloodline edge in family-tree mode. Typically `parent`.                                          |
+| **Gen**      | Genealogy — counts as a bloodline edge in family-graph mode. Typically `parent`.                                          |
 | **Line**     | `solid`, `dashed`, `dotted`, or `double`. Useful for marking "secret", "former", "rumored" relationships.               |
 
 Defaults shipped:
 
-| Name    | Sym | Pair | Tree | Gen | Line    |
-|---------|:---:|:----:|:----:|:---:|---------|
-| ally    | ✓   |      |      |     | solid   |
-| enemy   | ✓   |      |      |     | solid   |
-| family  | ✓   |      | ✓    |     | solid   |
-| friend  | ✓   |      |      |     | solid   |
-| rival   | ✓   |      |      |     | dashed  |
-| spouse  | ✓   | ✓    |      |     | double  |
-| lover   | ✓   |      |      |     | dashed  |
-| mentor  |     |      |      |     | dotted  |
-| parent  |     |      | ✓    | ✓   | solid   |
+| Name    | Colour                | Sym | Pair | Tree | Gen | Line    |
+|---------|-----------------------|:---:|:----:|:----:|:---:|---------|
+| ally    | `#22c55e` emerald     | ✓   |      |      |     | solid   |
+| enemy   | `#dc2626` crimson     | ✓   |      |      |     | solid   |
+| family  | `#eab308` gold        | ✓   |      | ✓    |     | solid   |
+| friend  | `#0891b2` deep cyan   | ✓   |      |      |     | solid   |
+| rival   | `#fb923c` tangerine   | ✓   |      |      |     | dashed  |
+| spouse  | `#d946ef` fuchsia     | ✓   | ✓    |      |     | double  |
+| lover   | `#fb7185` rose        | ✓   |      |      |     | dashed  |
+| mentor  | `#8b5cf6` violet      |     |      |      |     | dotted  |
+| parent  | `#b45309` bronze      |     |      | ✓    | ✓   | solid   |
+
+The palette is chosen so each line is distinguishable from every other at the typical edge widths used in the graph view, on both Obsidian dark and light themes. Greens read as positive, reds and oranges as adversarial, gold and bronze as kinship, pinks as romantic, violet for the asymmetric mentor relationship.
+
+![Palette](docs/palette.png)
 
 Rename, recolour, add, or delete freely — they're just defaults.
 
