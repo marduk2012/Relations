@@ -1,9 +1,29 @@
 {
-  "id": "relations",
-  "name": "Relations",
-  "version": "0.6.0",
-  "minAppVersion": "1.4.0",
-  "description": "Visualise the relationships between any set of notes — NPC casts, family trees, factions, organisations, historical figures. Note-driven, with portraits, line styles, and embeddable graphs.",
-  "author": "You",
-  "isDesktopOnly": false
+  "name": "relations",
+  "version": "0.9.1",
+  "description": "Visualise relationships between Obsidian notes",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+  },
+  "keywords": ["obsidian", "plugin", "worldbuilding", "ttrpg", "fiction", "genealogy"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^16.11.6",
+    "@typescript-eslint/eslint-plugin": "5.29.0",
+    "@typescript-eslint/parser": "5.29.0",
+    "builtin-modules": "3.3.0",
+    "esbuild": "0.17.3",
+    "obsidian": "latest",
+    "tslib": "2.4.0",
+    "typescript": "4.7.4"
+  },
+  "dependencies": {
+    "cytoscape": "^3.28.1",
+    "cytoscape-fcose": "^2.2.0",
+    "cytoscape-dagre": "^2.5.0",
+    "@types/cytoscape": "^3.21.0"
+  }
 }

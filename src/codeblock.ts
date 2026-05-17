@@ -1,8 +1,9 @@
 import { App, MarkdownPostProcessorContext, MarkdownRenderChild, parseYaml, TFile } from "obsidian";
 import { Core } from "cytoscape";
 import { RelationsSettings } from "./types";
-import { buildFullGraph, buildLocalGraph } from "./graph";
+import { buildFullGraph, buildLocalGraph, buildFamilyNeighborhood } from "./graph";
 import { renderGraph } from "./render";
+import type { GraphCache } from "./graph-cache";
 
 export type EmbedSize = "mini" | "small" | "large";
 
@@ -12,7 +13,10 @@ interface CodeBlockOptions {
 	center?: string;
 	scope?: "local" | "full";
 	tree?: boolean;
-	familyTree?: boolean;
+	familyGraph?: boolean;  // family view: generation-aligned positioning + Cytoscape
+	                        // edges differentiated by relationship type (marriage solid,
+	                        // informal partnership dotted, parent→child arrowed).
+	                        // Centered on the active/host note's family neighbourhood.
 	zoom?: number;
 	height?: string;          // overrides the size's default height; e.g. "800px", "60vh"
 }
@@ -35,6 +39,7 @@ class RelationsBlockChild extends MarkdownRenderChild {
 		private settings: RelationsSettings,
 		private options: ParsedOptions,
 		private sourcePath: string,
+		private cache: GraphCache | null,
 	) {
 		super(containerEl);
 	}
@@ -86,14 +91,28 @@ class RelationsBlockChild extends MarkdownRenderChild {
 		let graph;
 		let highlightId: string | undefined;
 
-		if (this.options.scope === "full") {
-			graph = buildFullGraph(this.app, this.settings);
+		// Family-tree and family-graph both focus on the host note specifically —
+		// Family-graph mode focuses on the host note specifically — same logic as
+		// the side-panel view: ignore scope/depth, build the host's family
+		// neighbourhood. `scope: full` still works as an opt-out for users who
+		// want the entire vault's family in one block.
+		const useFamilyNeighbourhood = this.options.familyGraph && this.options.scope !== "full";
+
+		if (useFamilyNeighbourhood) {
+			if (!hostFile) {
+				canvas.createDiv({ cls: "relations-empty", text: "Could not resolve host note for family view." });
+				return;
+			}
+			graph = buildFamilyNeighborhood(this.app, this.settings, hostFile.path, this.cache);
+			highlightId = hostFile.path;
+		} else if (this.options.scope === "full") {
+			graph = buildFullGraph(this.app, this.settings, this.cache);
 		} else {
 			if (!hostFile) {
 				canvas.createDiv({ cls: "relations-empty", text: "Could not resolve host note for local graph." });
 				return;
 			}
-			graph = buildLocalGraph(this.app, this.settings, hostFile.path, effectiveDepth);
+			graph = buildLocalGraph(this.app, this.settings, hostFile.path, effectiveDepth, this.cache);
 			highlightId = hostFile.path;
 		}
 
@@ -114,7 +133,7 @@ class RelationsBlockChild extends MarkdownRenderChild {
 			graph,
 			highlightId,
 			useTreeLayout: this.options.tree,
-			familyTree: this.options.familyTree,
+			familyGraph: this.options.familyGraph,
 			compact: effectiveSize === "mini",
 			zoomMultiplier: this.options.zoom,
 		});
@@ -126,7 +145,8 @@ class RelationsBlockChild extends MarkdownRenderChild {
 			const usedTypes = new Set(graph.edges.map((e) => e.type));
 			const visibleTypes = this.settings.relationshipTypes.filter((t) => usedTypes.has(t.name));
 			if (visibleTypes.length > 0) {
-				renderLegend(el, visibleTypes);
+				const legend = el.createDiv({ cls: "relations-legend" });
+				renderLegend(legend, visibleTypes);
 			}
 		}
 	}
@@ -136,14 +156,27 @@ class RelationsBlockChild extends MarkdownRenderChild {
  * Build a legend strip of relationship types into `host`. Used by both code blocks
  * and the side-panel view (re-exported for view.ts to consume).
  */
+/**
+ * Render a legend listing relationship types with their color swatches and flags.
+ * Writes legend items as children of `host`. The caller is responsible for any
+ * outer container styling (e.g. `host.toggleClass("is-hidden", …)`).
+ *
+ * If `clear` is true, the host is emptied first — useful for re-rendering when
+ * settings change. Code-block usage typically passes `false` because the host
+ * is freshly created.
+ */
 export function renderLegend(
 	host: HTMLElement,
 	types: import("./types").RelationshipType[],
-): HTMLElement {
-	const legend = host.createDiv({ cls: "relations-legend" });
+	clear = false,
+): void {
+	if (clear) host.empty();
 	for (const t of types) {
-		const item = legend.createDiv({ cls: "relations-legend-item" });
+		const item = host.createDiv({ cls: "relations-legend-item" });
 		const swatch = item.createSpan({ cls: `relations-legend-swatch is-${t.lineStyle}` });
+		// For dashed/dotted/double swatches, the visual is built with borders and
+		// pseudo-elements in CSS — the color comes from a CSS custom property so a
+		// single rule can reference it for foreground/background.
 		swatch.style.setProperty("--swatch-color", t.color);
 		let label = t.name;
 		if (!t.symmetric) label += " →";
@@ -151,7 +184,6 @@ export function renderLegend(
 		if (t.treeLayout) label += " ⊥";
 		item.createSpan({ text: label });
 	}
-	return legend;
 }
 
 /**
@@ -161,12 +193,9 @@ export function renderLegend(
  * also use it, so this catches every callout-style host the plugin might land in.
  */
 function isInsideCallout(el: HTMLElement): boolean {
-	let cur: HTMLElement | null = el.parentElement;
-	while (cur && cur !== document.body) {
-		if (cur.classList.contains("callout")) return true;
-		cur = cur.parentElement;
-	}
-	return false;
+	// Element.closest matches the receiver too, but the embed div itself is never
+	// the callout — it's a child of one if anything — so this is fine.
+	return el.closest(".callout") !== null;
 }
 
 export function processRelationsBlock(
@@ -175,9 +204,10 @@ export function processRelationsBlock(
 	source: string,
 	el: HTMLElement,
 	ctx: MarkdownPostProcessorContext,
+	cache: GraphCache | null = null,
 ): void {
 	const options = parseOptions(source);
-	const child = new RelationsBlockChild(el, app, settings, options, ctx.sourcePath);
+	const child = new RelationsBlockChild(el, app, settings, options, ctx.sourcePath, cache);
 	ctx.addChild(child);
 }
 
@@ -209,9 +239,10 @@ function parseOptions(source: string): ParsedOptions {
 
 	const scope = parsed["scope"] === "full" ? "full" : "local";
 	const tree = parsed["tree"] === true;
-	// Accept both "family-tree" (preferred, kebab-case to match YAML conventions)
-	// and "familyTree" (camelCase, friendlier for users coming from JS).
-	const familyTree = parsed["family-tree"] === true || parsed["familyTree"] === true;
+	// "family-graph" enables the family view: active-note focused, generation-aligned,
+	// edges styled by relationship type (marriage solid, informal partnership dotted,
+	// parent→child arrowed). Accept kebab-case (preferred) and camelCase aliases.
+	const familyGraph = parsed["family-graph"] === true || parsed["familyGraph"] === true;
 	const center = typeof parsed["center"] === "string" ? (parsed["center"] as string) : undefined;
 
 	// Zoom: accept a number (1.4) or a string ending in "%" ("140%"). Out-of-range
@@ -246,7 +277,7 @@ function parseOptions(source: string): ParsedOptions {
 		}
 	}
 
-	return { ...DEFAULTS, size, depth, scope, tree, familyTree, center, zoom, height, sizeExplicit };
+	return { ...DEFAULTS, size, depth, scope, tree, familyGraph, center, zoom, height, sizeExplicit };
 }
 
 function resolveHostFile(app: App, hostPath: string, sourcePath: string): TFile | null {

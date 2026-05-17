@@ -7,7 +7,7 @@ export interface RelationshipType {
 	pair: boolean;            // pair-tightly: pulls nodes close + draws short connector (e.g. spouse)
 	treeLayout: boolean;      // when this type dominates a graph, switch to top-down dagre
 	lineStyle: LineStyle;     // edge line appearance
-	genealogy: boolean;       // counts as a bloodline edge for family-tree layout (e.g. parent)
+	genealogy: boolean;       // counts as a bloodline edge for family-graph layout (e.g. parent)
 }
 
 export type GraphMode = "full" | "local";
@@ -29,21 +29,35 @@ export interface RelationsSettings {
 	// Local graph: how many hops out from the active note
 	localGraphDepth: number;
 
-	// Side-panel: render in family-tree mode (overrides force-directed)
-	familyTree: boolean;
+	// Whether to animate the layout when a graph is first rendered. When false, nodes
+	// snap straight to their final positions — useful on slower hardware, or for users
+	// who find the settle-in animation distracting.
+	animateLayout: boolean;
 }
 
 export const DEFAULT_SETTINGS: RelationsSettings = {
 	relationshipTypes: [
-		{ name: "ally",   color: "#4ade80", symmetric: true,  pair: false, treeLayout: false, lineStyle: "solid",  genealogy: false },
-		{ name: "enemy",  color: "#ef4444", symmetric: true,  pair: false, treeLayout: false, lineStyle: "solid",  genealogy: false },
-		{ name: "family", color: "#fbbf24", symmetric: true,  pair: false, treeLayout: true,  lineStyle: "solid",  genealogy: false },
-		{ name: "friend", color: "#60a5fa", symmetric: true,  pair: false, treeLayout: false, lineStyle: "solid",  genealogy: false },
-		{ name: "rival",  color: "#f97316", symmetric: true,  pair: false, treeLayout: false, lineStyle: "dashed", genealogy: false },
-		{ name: "spouse", color: "#ec4899", symmetric: true,  pair: true,  treeLayout: false, lineStyle: "double", genealogy: false },
-		{ name: "lover",  color: "#f472b6", symmetric: true,  pair: false, treeLayout: false, lineStyle: "dashed", genealogy: false },
-		{ name: "mentor", color: "#a78bfa", symmetric: false, pair: false, treeLayout: false, lineStyle: "dotted", genealogy: false },
-		{ name: "parent", color: "#fbbf24", symmetric: false, pair: false, treeLayout: true,  lineStyle: "solid",  genealogy: true  },
+		// Color choices — each anchored in convention while being distinguishable
+		// at small edge widths. ΔE distances between any pair of warm-warm or
+		// cool-cool types are at least ~20 in Lab space.
+		//   ally    — emerald: classic green-for-positive bond
+		//   enemy   — crimson: deep red, reads as "danger"
+		//   family  — gold:    warm "kinship" yellow
+		//   friend  — cyan:    cool teal, well separated from ally
+		//   rival   — tangerine: orange lifted away from enemy red
+		//   spouse  — fuchsia: anchors the romantic-bond color family
+		//   lover   — rose:    warmer/lighter than spouse, clearly separate
+		//   mentor  — violet:  traditional "wisdom" hue
+		//   parent  — bronze:  earthy "blood lineage" brown, distinct from family gold
+		{ name: "ally",   color: "#22c55e", symmetric: true,  pair: false, treeLayout: false, lineStyle: "solid",  genealogy: false },
+		{ name: "enemy",  color: "#dc2626", symmetric: true,  pair: false, treeLayout: false, lineStyle: "solid",  genealogy: false },
+		{ name: "family", color: "#eab308", symmetric: true,  pair: false, treeLayout: true,  lineStyle: "solid",  genealogy: false },
+		{ name: "friend", color: "#0891b2", symmetric: true,  pair: false, treeLayout: false, lineStyle: "solid",  genealogy: false },
+		{ name: "rival",  color: "#fb923c", symmetric: true,  pair: false, treeLayout: false, lineStyle: "dashed", genealogy: false },
+		{ name: "spouse", color: "#d946ef", symmetric: true,  pair: true,  treeLayout: false, lineStyle: "double", genealogy: false },
+		{ name: "lover",  color: "#fb7185", symmetric: true,  pair: false, treeLayout: false, lineStyle: "dashed", genealogy: false },
+		{ name: "mentor", color: "#8b5cf6", symmetric: false, pair: false, treeLayout: false, lineStyle: "dotted", genealogy: false },
+		{ name: "parent", color: "#b45309", symmetric: false, pair: false, treeLayout: true,  lineStyle: "solid",  genealogy: true  },
 	],
 	imageProperty: "npcimage",
 	folderScopes: [],
@@ -51,7 +65,7 @@ export const DEFAULT_SETTINGS: RelationsSettings = {
 	showLegend: true,
 	layout: "fcose",
 	localGraphDepth: 2,
-	familyTree: false,
+	animateLayout: true,
 };
 
 // Internal model

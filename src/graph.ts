@@ -6,14 +6,26 @@ import {
 	RelationsSettings,
 	RelationshipType,
 } from "./types";
+import { GraphCache } from "./graph-cache";
 
 /**
  * Build the full relationship graph by scanning every markdown file in scope.
+ *
+ * If a `cache` is provided, it's consulted first — a hit returns the previously-
+ * built graph immediately without rescanning the vault. On miss, the freshly-built
+ * graph is stored. Callers that don't have a cache (or want to force a rebuild)
+ * can pass `null` or omit the parameter.
  */
 export function buildFullGraph(
 	app: App,
 	settings: RelationsSettings,
+	cache: GraphCache | null = null,
 ): RelationsGraph {
+	if (cache) {
+		const hit = cache.get(settings);
+		if (hit) return hit;
+	}
+
 	const typeMap = buildTypeMap(settings);
 	const files = app.vault.getMarkdownFiles().filter((f) => inScope(f, settings));
 
@@ -86,20 +98,26 @@ export function buildFullGraph(
 		(e) => notePaths.has(e.source) && notePaths.has(e.target),
 	));
 
-	return { nodes, edges };
+	const result = { nodes, edges };
+	if (cache) cache.set(settings, result);
+	return result;
 }
 
 /**
  * Build a graph centered on a single file, expanding outward by `depth` hops.
  * BFS over the full graph's edge set.
+ *
+ * The full graph is fetched via the same cache as `buildFullGraph` — local-graph
+ * calls from multiple embeds on the same page reuse one scan.
  */
 export function buildLocalGraph(
 	app: App,
 	settings: RelationsSettings,
 	centerPath: string,
 	depth: number,
+	cache: GraphCache | null = null,
 ): RelationsGraph {
-	const full = buildFullGraph(app, settings);
+	const full = buildFullGraph(app, settings, cache);
 	if (depth < 0) depth = 0;
 	if (!full.nodes.some((n) => n.id === centerPath)) {
 		// Center note isn't connected — return just it (if it exists) so the view can show "no relationships yet"
@@ -147,7 +165,123 @@ export function buildLocalGraph(
 	return { nodes, edges };
 }
 
-// ---------- helpers ----------
+/**
+ * Build a graph containing only the genealogy/partner neighbourhood of a focus
+ * note: ancestors (transitively up the parent chain), descendants (transitively
+ * down through children of children), and partners of anyone in that set.
+ *
+ * Used by family-graph mode. Without this, family-graph would show every
+ * connected person in the vault — fine for "show me the whole dynasty" but
+ * overwhelming when the user is looking at one character and just wants to see
+ * who's their parent, who's their kid, and who their partners are.
+ *
+ * Allies, enemies, mentors etc. are dropped — those don't contribute to the
+ * who-had-children-with-whom view that family-graph is for.
+ */
+export function buildFamilyNeighborhood(
+	app: App,
+	settings: RelationsSettings,
+	focusPath: string,
+	cache: GraphCache | null = null,
+): RelationsGraph {
+	const full = buildFullGraph(app, settings, cache);
+
+	// If the focus note doesn't appear in the graph at all, return just it.
+	if (!full.nodes.some((n) => n.id === focusPath)) {
+		const f = app.vault.getAbstractFileByPath(focusPath);
+		if (f instanceof TFile) {
+			const node = buildNode(app, f, settings);
+			return { nodes: node ? [node] : [], edges: [] };
+		}
+		return { nodes: [], edges: [] };
+	}
+
+	// Build genealogy adjacency in both directions:
+	//   childrenOf[parent] = list of children declared with that parent
+	//   parentsOf[child]   = list of parents
+	// Conventionally, our edges go child->parent (the child note declares its
+	// parents), so genealogy edge.source = child, edge.target = parent.
+	const childrenOf = new Map<string, Set<string>>();
+	const parentsOf = new Map<string, Set<string>>();
+	const partnersOf = new Map<string, Set<string>>();
+
+	for (const e of full.edges) {
+		if (e.genealogy) {
+			if (!parentsOf.has(e.source)) parentsOf.set(e.source, new Set());
+			if (!childrenOf.has(e.target)) childrenOf.set(e.target, new Set());
+			parentsOf.get(e.source)!.add(e.target);
+			childrenOf.get(e.target)!.add(e.source);
+		}
+		if (e.pair) {
+			if (!partnersOf.has(e.source)) partnersOf.set(e.source, new Set());
+			if (!partnersOf.has(e.target)) partnersOf.set(e.target, new Set());
+			partnersOf.get(e.source)!.add(e.target);
+			partnersOf.get(e.target)!.add(e.source);
+		}
+	}
+
+	// Walk ancestors up.
+	const included = new Set<string>([focusPath]);
+	const ancestorQueue = [focusPath];
+	while (ancestorQueue.length > 0) {
+		const cur = ancestorQueue.shift()!;
+		const parents = parentsOf.get(cur);
+		if (!parents) continue;
+		for (const p of parents) {
+			if (included.has(p)) continue;
+			included.add(p);
+			ancestorQueue.push(p);
+		}
+	}
+	// Walk descendants down.
+	const descendantQueue = [focusPath];
+	while (descendantQueue.length > 0) {
+		const cur = descendantQueue.shift()!;
+		const children = childrenOf.get(cur);
+		if (!children) continue;
+		for (const c of children) {
+			if (included.has(c)) continue;
+			included.add(c);
+			descendantQueue.push(c);
+		}
+	}
+
+	// Pull in co-parents — anyone who shares a child with someone we've already
+	// included. This catches partners that aren't ancestors/descendants of the
+	// focus, e.g. Arthur's partner Morgause when the focus is Arthur (Morgause
+	// isn't anyone's ancestor in Arthur's line, but she's the mother of his
+	// child and so should appear).
+	const focusFamily = new Set(included);  // snapshot before adding co-parents
+	for (const personId of focusFamily) {
+		const kids = childrenOf.get(personId);
+		if (!kids) continue;
+		for (const kid of kids) {
+			const kidParents = parentsOf.get(kid);
+			if (!kidParents) continue;
+			for (const coParent of kidParents) {
+				included.add(coParent);
+			}
+		}
+	}
+
+	// Pull in declared partners (pair edges) of anyone in the family — covers
+	// childless marriages like Arthur+Guinevere.
+	for (const personId of [...included]) {
+		const partners = partnersOf.get(personId);
+		if (!partners) continue;
+		for (const p of partners) included.add(p);
+	}
+
+	const nodes = full.nodes.filter((n) => included.has(n.id));
+	// Only keep genealogy + pair edges, and only those whose endpoints are both
+	// in the neighbourhood. Other relationship types (ally, enemy, etc.) are
+	// dropped — family-graph mode doesn't show them.
+	const edges = full.edges.filter(
+		(e) => (e.genealogy || e.pair) && included.has(e.source) && included.has(e.target),
+	);
+
+	return { nodes, edges };
+}
 
 function buildTypeMap(settings: RelationsSettings): Map<string, RelationshipType> {
 	const m = new Map<string, RelationshipType>();

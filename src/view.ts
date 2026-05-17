@@ -4,6 +4,7 @@ import type RelationsPlugin from "./main";
 import { VIEW_TYPE_RELATIONS, GraphMode, RelationsGraph } from "./types";
 import { renderGraph } from "./render";
 import { buildFullGraph, buildLocalGraph } from "./graph";
+import { renderLegend } from "./codeblock";
 
 export class RelationsView extends ItemView {
 	private plugin: RelationsPlugin;
@@ -13,7 +14,6 @@ export class RelationsView extends ItemView {
 	private modeBtnFull: HTMLButtonElement | null = null;
 	private modeBtnLocal: HTMLButtonElement | null = null;
 	private depthInput: HTMLInputElement | null = null;
-	private familyTreeBtn: HTMLButtonElement | null = null;
 	private subtitleEl: HTMLElement | null = null;
 	private mode: GraphMode = "full";
 	private currentLocalDepth = 2;
@@ -63,19 +63,6 @@ export class RelationsView extends ItemView {
 		const spacer = toolbar.createDiv({ cls: "relations-spacer" });
 		spacer.style.flex = "1";
 
-		// Family-tree mode toggle. Persists in plugin settings so it's sticky across
-		// reloads. When on, the dagre + spouse-pair + children-under-midpoint layout
-		// is used instead of fcose force-directed.
-		this.familyTreeBtn = toolbar.createEl("button", { text: "Family tree" });
-		this.familyTreeBtn.title = "Toggle family-tree layout";
-		this.familyTreeBtn.addEventListener("click", async () => {
-			this.plugin.settings.familyTree = !this.plugin.settings.familyTree;
-			await this.plugin.saveSettings();
-			this.updateFamilyTreeButton();
-			this.render();
-		});
-		this.updateFamilyTreeButton();
-
 		const refreshBtn = toolbar.createEl("button", { text: "Refresh" });
 		refreshBtn.addEventListener("click", () => this.render());
 		const fitBtn = toolbar.createEl("button", { text: "Fit" });
@@ -123,10 +110,6 @@ export class RelationsView extends ItemView {
 		}
 	}
 
-	private updateFamilyTreeButton(): void {
-		this.familyTreeBtn?.toggleClass("is-active", this.plugin.settings.familyTree);
-	}
-
 	render(): void {
 		if (!this.canvas) return;
 
@@ -140,14 +123,14 @@ export class RelationsView extends ItemView {
 				this.showEmpty("No active note. Open a note to see its relationships.");
 				return;
 			}
-			graph = buildLocalGraph(this.app, this.plugin.settings, active.path, this.currentLocalDepth);
+			graph = buildLocalGraph(this.app, this.plugin.settings, active.path, this.currentLocalDepth, this.plugin.graphCache);
 			highlightId = active.path;
 			this.setSubtitle(`Showing ${graph.nodes.length} node${graph.nodes.length === 1 ? "" : "s"} within ${this.currentLocalDepth} hop${this.currentLocalDepth === 1 ? "" : "s"} of ${active.basename}`);
 			useTree = shouldUseTreeLayout(graph, this.plugin.settings);
 		} else {
-			graph = buildFullGraph(this.app, this.plugin.settings);
+			graph = buildFullGraph(this.app, this.plugin.settings, this.plugin.graphCache);
 			this.setSubtitle(`Showing ${graph.nodes.length} note${graph.nodes.length === 1 ? "" : "s"} across the vault`);
-			useTree = false; // full graph stays force-directed by default
+			useTree = false;
 		}
 
 		this.cy?.destroy();
@@ -170,7 +153,6 @@ export class RelationsView extends ItemView {
 			graph,
 			highlightId,
 			useTreeLayout: useTree,
-			familyTree: this.plugin.settings.familyTree,
 		});
 
 		this.renderLegend();
@@ -190,23 +172,13 @@ export class RelationsView extends ItemView {
 
 	private renderLegend(): void {
 		if (!this.legendEl) return;
-		this.legendEl.empty();
 		this.legendEl.toggleClass("is-hidden", !this.plugin.settings.showLegend);
-		if (!this.plugin.settings.showLegend) return;
-
-		for (const t of this.plugin.settings.relationshipTypes) {
-			const item = this.legendEl.createDiv({ cls: "relations-legend-item" });
-			const swatch = item.createSpan({ cls: `relations-legend-swatch is-${t.lineStyle}` });
-			// For dashed/dotted/double, the visual is built with borders and pseudo-elements
-			// in CSS — the color comes from a CSS custom property so a single rule can
-			// reference it for foreground/background as needed.
-			swatch.style.setProperty("--swatch-color", t.color);
-			let label = t.name;
-			if (!t.symmetric) label += " →";
-			if (t.pair) label += " ⚭";
-			if (t.treeLayout) label += " ⊥";
-			item.createSpan({ text: label });
+		if (!this.plugin.settings.showLegend) {
+			this.legendEl.empty();
+			return;
 		}
+		// `clear: true` so re-renders (after settings change) don't accumulate items.
+		renderLegend(this.legendEl, this.plugin.settings.relationshipTypes, true);
 	}
 }
 

@@ -120,7 +120,7 @@
 	width: 18px;
 	height: 4px;
 	border-radius: 2px;
-	background-color: var(--swatch-color, #888);
+	background-color: var(--swatch-color, #888888);
 	position: relative;
 }
 
@@ -128,7 +128,7 @@
 .relations-legend-swatch.is-dashed {
 	background-color: transparent;
 	height: 0;
-	border-top: 3px dashed var(--swatch-color, #888);
+	border-top: 3px dashed var(--swatch-color, #888888);
 	margin-top: 4px;
 	margin-bottom: 4px;
 	border-radius: 0;
@@ -137,7 +137,7 @@
 .relations-legend-swatch.is-dotted {
 	background-color: transparent;
 	height: 0;
-	border-top: 3px dotted var(--swatch-color, #888);
+	border-top: 3px dotted var(--swatch-color, #888888);
 	margin-top: 4px;
 	margin-bottom: 4px;
 	border-radius: 0;
@@ -147,8 +147,8 @@
 .relations-legend-swatch.is-double {
 	background-color: transparent;
 	height: 4px;
-	border-top: 1.5px solid var(--swatch-color, #888);
-	border-bottom: 1.5px solid var(--swatch-color, #888);
+	border-top: 1.5px solid var(--swatch-color, #888888);
+	border-bottom: 1.5px solid var(--swatch-color, #888888);
 	border-radius: 0;
 }
 

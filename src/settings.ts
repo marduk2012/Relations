@@ -55,7 +55,7 @@ export class RelationsSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Default layout")
-			.setDesc("fcose is force-directed (default). dagre lays out top-down (good if your vault is family-tree heavy).")
+			.setDesc("fcose is force-directed (default). dagre lays out top-down (good if your vault is genealogy-heavy).")
 			.addDropdown((d) => d
 				.addOption("fcose", "fcose (force-directed)")
 				.addOption("cose", "cose (basic force-directed)")
@@ -90,6 +90,17 @@ export class RelationsSettingTab extends PluginSettingTab {
 					this.plugin.refreshGraphView();
 				}));
 
+		new Setting(containerEl)
+			.setName("Animate layout")
+			.setDesc("When on, nodes settle into place with a brief animation when a graph first opens. Turn off to have nodes appear in their final positions immediately — useful on slower hardware or if the animation feels distracting.")
+			.addToggle((t) => t
+				.setValue(this.plugin.settings.animateLayout)
+				.onChange(async (v) => {
+					this.plugin.settings.animateLayout = v;
+					await this.plugin.saveSettings();
+					this.plugin.refreshGraphView();
+				}));
+
 		containerEl.createEl("h3", { text: "Relationship types" });
 		const help = containerEl.createDiv({ cls: "setting-item-description" });
 		help.innerHTML = `
@@ -98,7 +109,7 @@ export class RelationsSettingTab extends PluginSettingTab {
 				<li><strong>Sym</strong> — symmetric: declaring on either note creates the relationship both ways.</li>
 				<li><strong>Pair</strong> — pull paired nodes very close (e.g. spouse, partner).</li>
 				<li><strong>Tree</strong> — when this type dominates a graph, lay it out top-down (e.g. family, parent).</li>
-				<li><strong>Gen</strong> — genealogy: this type counts as a bloodline edge in family-tree mode. Typically <code>parent</code>. Used to build generations and child-under-midpoint placement.</li>
+				<li><strong>Gen</strong> — genealogy: this type counts as a bloodline edge in family-graph mode. Typically <code>parent</code>. Used to build generations and place children below their parents.</li>
 				<li><strong>Line</strong> — solid / dashed / dotted / double. Useful for marking "secret", "former", "rumored" or otherwise different-flavored relationships.</li>
 			</ul>
 		`;
@@ -133,7 +144,7 @@ export class RelationsSettingTab extends PluginSettingTab {
 			"depth: 1            # number of hops from this note (local scope; forced to 1 for mini)\n" +
 			"scope: local        # local | full\n" +
 			"tree: false         # generic top-down dagre layout\n" +
-			"family-tree: false  # proper family-tree layout: spouses paired, children under midpoint\n" +
+			"family-graph: false # focused family view: parents above, partners on the same row, children below\n" +
 			"zoom: 1.0           # zoom multiplier applied after fit. mini defaults to 1.4. 1.5 = 150%, etc.\n" +
 			"height: 800px       # override the size's default height. Accepts px, em, rem, vh, vw, %.\n" +
 			"# center: \"[[Other Note]]\"      # override the focus note\n" +
@@ -193,7 +204,7 @@ export class RelationsSettingTab extends PluginSettingTab {
 			makeCheckbox("symmetric", "Symmetric — A→B implies B→A");
 			makeCheckbox("pair",      "Pair — pull these nodes very close (e.g. spouse)");
 			makeCheckbox("treeLayout","Tree — lay out top-down when this type dominates");
-			makeCheckbox("genealogy", "Genealogy — bloodline edge for family-tree mode");
+			makeCheckbox("genealogy", "Genealogy — bloodline edge for family-graph mode");
 
 			// Line style dropdown
 			const lineSelect = row.createEl("select", { cls: "relations-types-linestyle" });

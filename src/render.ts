@@ -2,8 +2,8 @@ import { App, TFile, Menu } from "obsidian";
 import cytoscape, { Core, ElementDefinition, LayoutOptions } from "cytoscape";
 import fcose from "cytoscape-fcose";
 import dagre from "cytoscape-dagre";
-import { RelationsGraph, RelationsSettings } from "./types";
-import { applyFamilyTreeLayout } from "./family-tree";
+import { RelationsGraph, RelationsSettings, GraphEdge } from "./types";
+import { applyGenerationLayout } from "./family-tree";
 
 type Stylesheet = cytoscape.StylesheetStyle;
 
@@ -22,7 +22,10 @@ export interface RenderOptions {
 	graph: RelationsGraph;
 	highlightId?: string;
 	useTreeLayout?: boolean;
-	familyTree?: boolean;       // dagre + spouse pairing + children-under-midpoint
+	familyGraph?: boolean;      // generation-aligned positioning + Cytoscape edges,
+	                            // edge styles differentiated by relationship type
+	                            // (marriage solid, informal partnership dotted,
+	                            // parent→child arrowed). Active-note focused.
 	interactive?: boolean;
 	compact?: boolean;
 	zoomMultiplier?: number;    // applied AFTER fit; >1 zooms in, <1 zooms out. Default 1.
@@ -84,9 +87,54 @@ function resolveTheme(host: HTMLElement): ThemeColors {
 	};
 }
 
+/**
+ * Measure pixel widths of node labels so the layout can space nodes proportionally
+ * to their label sizes. Without this, long names ("Drakmir Axen, erster Sohn von
+ * Mornak") visually overlap their neighbours because the layout treats every node as
+ * a fixed-width unit.
+ *
+ * Cytoscape doesn't expose a label measurement API for canvas-rendered text, so we
+ * render each label into a hidden probe span styled to match the node stylesheet's
+ * font/size. The browser's text measurement will be very close to what Cytoscape's
+ * canvas renderer produces — within a pixel or two, plenty for layout purposes.
+ *
+ * Returns a Map of node-id → measured width in pixels. Always at least 1px.
+ * Measuring 1000 labels takes a few ms; a single probe is reused for all nodes.
+ */
+function measureLabelWidths(
+	host: HTMLElement,
+	graph: RelationsGraph,
+	compact: boolean,
+): Map<string, number> {
+	const result = new Map<string, number>();
+	const fontSize = compact ? 10 : 13;
+
+	const probe = host.ownerDocument.createElement("span");
+	probe.style.position = "absolute";
+	probe.style.visibility = "hidden";
+	probe.style.left = "-99999px";
+	probe.style.top = "0";
+	probe.style.whiteSpace = "nowrap";
+	probe.style.fontSize = `${fontSize}px`;
+	probe.style.fontWeight = "500";
+	// fontFamily inherits from host — same as what Cytoscape will use to render.
+	host.appendChild(probe);
+
+	try {
+		for (const n of graph.nodes) {
+			probe.textContent = n.label;
+			result.set(n.id, Math.max(1, probe.offsetWidth));
+		}
+	} finally {
+		probe.remove();
+	}
+
+	return result;
+}
+
 export function renderGraph(opts: RenderOptions): Core {
 	ensureExtensions();
-	const { app, settings, container, graph, highlightId, useTreeLayout, compact, familyTree } = opts;
+	const { app, settings, container, graph, highlightId, useTreeLayout, compact, familyGraph } = opts;
 	const interactive = opts.interactive !== false;
 	// Default zoom multiplier: mini gets 1.4x so the graph "comes forward" and fills
 	// the small canvas. Other sizes default to 1.0 (just the natural fit).
@@ -96,14 +144,103 @@ export function renderGraph(opts: RenderOptions): Core {
 	// fit() padding scales with size — mini wants tight packing, larger views breathe more.
 	const fitPadding = compact ? 6 : 30;
 
-	const elements = toCytoscape(graph, highlightId);
+	// Edge filtering and synthesis varies by mode:
+	//
+	// familyGraph (graph-style family): keep only genealogy + pair edges (same as
+	//   the side-panel filters), AND synthesize "informal partnership" edges
+	//   between any two people who share a child but have no declared pair edge
+	//   between them. Without this synthesis, an unmarried couple's relationship
+	//   is only readable by tracing two arrows down to a shared kid — explicit
+	//   dotted line between them makes it instantly visible.
+	//
+	// Other modes: pass the graph through unchanged.
+	let effectiveGraph: RelationsGraph;
+	if (familyGraph) {
+		const filteredRaw = graph.edges.filter((e) => e.genealogy || e.pair);
+
+		// Genealogy edges in our data go child→parent (the child's note declares
+		// its parents in frontmatter). For the family-graph view we invert these
+		// so arrows visually run parent→child, which is how genealogy charts are
+		// conventionally read. Pair edges stay as-is — they're symmetric anyway.
+		const filtered: GraphEdge[] = filteredRaw.map((e) => {
+			if (!e.genealogy) return e;
+			return { ...e, source: e.target, target: e.source };
+		});
+
+		// Find shared-children co-parents that aren't already in a pair edge.
+		// Walk genealogy edges (now parent->child after inversion) and group by
+		// child id (= edge.target).
+		const parentSets = new Map<string, string[]>();
+		for (const e of filtered) {
+			if (!e.genealogy) continue;
+			if (!parentSets.has(e.target)) parentSets.set(e.target, []);
+			parentSets.get(e.target)!.push(e.source);
+		}
+		const declaredPairs = new Set<string>();
+		for (const e of filtered) {
+			if (!e.pair) continue;
+			declaredPairs.add(pairKey(e.source, e.target));
+		}
+		// For each child with two+ parents, emit a synthetic informal-partnership
+		// edge between each pair of co-parents that don't already have one.
+		const synthesized: GraphEdge[] = [];
+		const synthesizedKeys = new Set<string>();
+		for (const parents of parentSets.values()) {
+			for (let i = 0; i < parents.length; i++) {
+				for (let j = i + 1; j < parents.length; j++) {
+					const a = parents[i];
+					const b = parents[j];
+					const k = pairKey(a, b);
+					if (declaredPairs.has(k)) continue;
+					if (synthesizedKeys.has(k)) continue;
+					synthesizedKeys.add(k);
+					synthesized.push({
+						source: a,
+						target: b,
+						type: "__informal_partnership",  // synthetic; not a real configured type
+						color: "#888888",                  // muted grey to read as "implied, not declared"
+						symmetric: true,
+						pair: true,
+						lineStyle: "dotted",
+						genealogy: false,
+					});
+				}
+			}
+		}
+		effectiveGraph = { nodes: graph.nodes, edges: [...filtered, ...synthesized] };
+	} else {
+		effectiveGraph = graph;
+	}
+
+	const elements = toCytoscape(effectiveGraph, highlightId);
 	const theme = resolveTheme(container);
 
-	// In familyTree mode we run the layout ourselves after init; passing `preset` here
-	// avoids running a normal layout that would just be overwritten.
-	const initialLayout = familyTree
+	// Measure node label widths up-front so layouts can space nodes proportionally
+	// to their labels. Without this, vaults with long descriptive names ("Drakmir
+	// Axen, erster Sohn von Mornak") get overlapping labels because every node is
+	// treated as the same width by both fcose and dagre.
+	const labelWidths = measureLabelWidths(container, effectiveGraph, !!compact);
+	// Stash on node data so the family-graph layout (which reads from the cy instance,
+	// not from `graph`) can access it cheaply via `node.data("labelWidth")`.
+	for (const el of elements) {
+		const id = (el.data as { id?: string }).id;
+		if (id !== undefined && labelWidths.has(id)) {
+			(el.data as Record<string, unknown>).labelWidth = labelWidths.get(id);
+		}
+	}
+
+	// Pick the layout. Two cases:
+	//
+	// familyGraph: skip layout (preset placeholder). Positions are computed by
+	//   applyGenerationLayout after init — generation-aligned rows with parents
+	//   above, partners on the same row, children below. Cytoscape draws its
+	//   own type-differentiated edges (solid for marriage, dotted for informal,
+	//   arrowed for genealogy).
+	//
+	// Otherwise: standard pickLayout.
+	const initialLayout = familyGraph
 		? ({ name: "preset" } as cytoscape.LayoutOptions)
-		: pickLayout(settings, useTreeLayout, graph, !!compact);
+		: pickLayout(settings, useTreeLayout, effectiveGraph, !!compact, labelWidths);
 
 	const cy = cytoscape({
 		container,
@@ -126,12 +263,13 @@ export function renderGraph(opts: RenderOptions): Core {
 		autolock: false,
 	});
 
-	if (familyTree) {
-		// Lazy import: applyFamilyTreeLayout is only needed when this mode is active,
-		// and putting the require here lets the bundler still tree-shake when it isn't.
-		// (Won't actually tree-shake here because we always import the module above
-		// in CommonJS bundling, but the cost is minimal.)
-		applyFamilyTreeLayout(cy, graph);
+	if (familyGraph) {
+		// Compute generation-aligned positions. Pass the original `graph` (with
+		// genealogy/pair edges intact) since the algorithm needs them to figure
+		// out family structure — `effectiveGraph` already had its edges replaced
+		// with our inverted/synthesized version which is for rendering, not for
+		// structural reasoning.
+		applyGenerationLayout(cy, graph);
 	}
 
 	// Apply per-node image styles after init. We do this here (not in the stylesheet
@@ -422,44 +560,95 @@ function buildStyle(theme: ThemeColors, compact: boolean): Stylesheet[] {
 	];
 }
 
+
 function pickLayout(
 	settings: RelationsSettings,
 	forceTree: boolean | undefined,
 	graph: RelationsGraph,
 	compact: boolean,
+	labelWidths: Map<string, number>,
 ): LayoutOptions {
+	// Average label width — used as a baseline so fcose's spacing scales with
+	// however verbose this vault's names happen to be. Vaults with short names
+	// (Arthur, Merlin) keep the tight default spacing; vaults with long names
+	// (Drakmir Axen, erster Sohn von Mornak) get proportionally more breathing
+	// room without manual configuration.
+	const avgLabelWidth = averageLabelWidth(labelWidths);
+	// Reference width: roughly the longest "short" name we expect by default
+	// (e.g. "Guinevere" ≈ 70px at fontSize 13). Anything longer than this scales
+	// up; anything shorter doesn't scale down (we don't want labels to crowd a
+	// node circle just because everyone happens to be named Bob).
+	const refWidth = compact ? 50 : 70;
+	const widthScale = Math.max(1, avgLabelWidth / refWidth);
+
 	const useTree = forceTree || settings.layout === "dagre";
+	const animate = settings.animateLayout !== false;
+
 	if (useTree) {
+		// Dagre's nodeSep is the horizontal gap *between* nodes on the same rank.
+		// Scaling it by widthScale means siblings with long names get spaced apart
+		// far enough that their labels don't overlap.
 		return {
 			name: "dagre",
 			rankDir: "TB",
-			nodeSep: compact ? 20 : 40,
+			nodeSep: Math.round((compact ? 20 : 40) * widthScale),
 			rankSep: compact ? 40 : 80,
-			animate: true,
+			animate,
 		} as unknown as LayoutOptions;
 	}
 
 	if (settings.layout === "cose") {
-		return { name: "cose", animate: true, padding: compact ? 8 : 30 };
+		return { name: "cose", animate, padding: compact ? 8 : 30 };
 	}
+
+	// fcose is per-node/per-edge functions, so we can use the actual label widths
+	// of the specific endpoints rather than a global average. This is more accurate
+	// than scaling everything by avgLabelWidth — a few long names won't push the
+	// short-named majority needlessly far apart.
+	const baseRepulsion = compact ? 800 : 5000;
+	const baseEdgeLen = compact ? 42 : 110;
+	const basePairLen = compact ? 18 : 35;
 
 	const fcoseOpts: Record<string, unknown> = {
 		name: "fcose",
-		animate: true,
+		animate,
 		randomize: graph.nodes.length > 1,
-		// Compact: nodes pull together harder, edges are shorter, padding is tight.
-		// We push these further than v0.4 so the mini canvas fills properly without
-		// relying entirely on a post-fit zoom multiplier.
-		nodeRepulsion: compact ? 800 : 5000,
+		// Repulsion as a function of the node — long-labeled nodes push others
+		// further away. Cytoscape's fcose accepts `nodeRepulsion: (node) => number`.
+		nodeRepulsion: (node: cytoscape.NodeSingular): number => {
+			const w = (node.data("labelWidth") as number | undefined) ?? refWidth;
+			const scale = Math.max(1, w / refWidth);
+			return baseRepulsion * scale;
+		},
+		// Ideal edge length: the longer the endpoints' labels, the longer the
+		// edge needs to be to avoid label overlap. We add a fixed fraction of the
+		// summed label widths so extreme cases (two 250px labels next to each
+		// other) get noticeably more space than typical (two 70px labels).
 		idealEdgeLength: (edge: cytoscape.EdgeSingular): number => {
-			if (edge.data("pair") === "true") return compact ? 18 : 35;
-			return compact ? 42 : 110;
+			const sourceW = (edge.source().data("labelWidth") as number | undefined) ?? refWidth;
+			const targetW = (edge.target().data("labelWidth") as number | undefined) ?? refWidth;
+			const labelPad = (sourceW + targetW) / 4;  // half of avg label width
+			if (edge.data("pair") === "true") return basePairLen + labelPad * 0.4;
+			return baseEdgeLen + labelPad;
 		},
 		edgeElasticity: (edge: cytoscape.EdgeSingular): number => {
 			return edge.data("pair") === "true" ? 0.9 : 0.45;
 		},
 		padding: compact ? 6 : 30,
-		nodeSeparation: compact ? 30 : 90,
+		nodeSeparation: Math.round((compact ? 30 : 90) * widthScale),
 	};
 	return fcoseOpts as unknown as LayoutOptions;
+}
+
+function averageLabelWidth(widths: Map<string, number>): number {
+	if (widths.size === 0) return 0;
+	let sum = 0;
+	for (const w of widths.values()) sum += w;
+	return sum / widths.size;
+}
+
+/** Normalised key for an unordered pair of node ids — used to detect already-declared
+ * pair edges when synthesising informal-partnership edges between co-parents. */
+function pairKey(a: string, b: string): string {
+	return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
