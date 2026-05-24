@@ -91,6 +91,17 @@ export class RelationsSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
+			.setName("Show node labels")
+			.setDesc("Show the note name under each node. Turn off for a cleaner, portrait-only graph. Individual embedded graphs can override this with `labels: true` or `labels: false` in the code block.")
+			.addToggle((t) => t
+				.setValue(this.plugin.settings.showNodeLabels)
+				.onChange(async (v) => {
+					this.plugin.settings.showNodeLabels = v;
+					await this.plugin.saveSettings();
+					this.plugin.refreshGraphView();
+				}));
+
+		new Setting(containerEl)
 			.setName("Animate layout")
 			.setDesc("When on, nodes settle into place with a brief animation when a graph first opens. Turn off to have nodes appear in their final positions immediately — useful on slower hardware or if the animation feels distracting.")
 			.addToggle((t) => t

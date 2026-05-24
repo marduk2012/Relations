@@ -14,6 +14,7 @@ export class RelationsView extends ItemView {
 	private modeBtnFull: HTMLButtonElement | null = null;
 	private modeBtnLocal: HTMLButtonElement | null = null;
 	private depthInput: HTMLInputElement | null = null;
+	private labelsBtn: HTMLButtonElement | null = null;
 	private subtitleEl: HTMLElement | null = null;
 	private mode: GraphMode = "full";
 	private currentLocalDepth = 2;
@@ -68,6 +69,18 @@ export class RelationsView extends ItemView {
 		const fitBtn = toolbar.createEl("button", { text: "Fit" });
 		fitBtn.addEventListener("click", () => this.cy?.fit(undefined, 40));
 
+		// Labels toggle — flips the global showNodeLabels setting and re-renders.
+		// Sticky across reloads since it writes to settings.
+		this.labelsBtn = toolbar.createEl("button", { text: "Labels" });
+		this.labelsBtn.title = "Show or hide note names under nodes";
+		this.labelsBtn.addEventListener("click", async () => {
+			this.plugin.settings.showNodeLabels = !this.plugin.settings.showNodeLabels;
+			await this.plugin.saveSettings();
+			this.updateLabelsButton();
+			this.render();
+		});
+		this.updateLabelsButton();
+
 		this.subtitleEl = root.createDiv({ cls: "relations-subtitle" });
 		this.canvas = root.createDiv({ cls: "relations-canvas" });
 		this.legendEl = root.createDiv({ cls: "relations-legend" });
@@ -108,6 +121,10 @@ export class RelationsView extends ItemView {
 		if (depthWrap) {
 			depthWrap.style.display = this.mode === "local" ? "" : "none";
 		}
+	}
+
+	private updateLabelsButton(): void {
+		this.labelsBtn?.toggleClass("is-active", this.plugin.settings.showNodeLabels !== false);
 	}
 
 	render(): void {

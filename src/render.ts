@@ -29,6 +29,8 @@ export interface RenderOptions {
 	interactive?: boolean;
 	compact?: boolean;
 	zoomMultiplier?: number;    // applied AFTER fit; >1 zooms in, <1 zooms out. Default 1.
+	showLabels?: boolean;       // show the note name under each node. Defaults to the
+	                            // showNodeLabels setting; a code-block can override it.
 }
 
 interface ThemeColors {
@@ -135,6 +137,9 @@ function measureLabelWidths(
 export function renderGraph(opts: RenderOptions): Core {
 	ensureExtensions();
 	const { app, settings, container, graph, highlightId, useTreeLayout, compact, familyGraph } = opts;
+	// Label visibility: explicit per-call override wins, else fall back to the
+	// global setting (default true for back-compat with vaults predating this option).
+	const showLabels = opts.showLabels ?? settings.showNodeLabels ?? true;
 	const interactive = opts.interactive !== false;
 	// Default zoom multiplier: mini gets 1.4x so the graph "comes forward" and fills
 	// the small canvas. Other sizes default to 1.0 (just the natural fit).
@@ -216,10 +221,14 @@ export function renderGraph(opts: RenderOptions): Core {
 	const theme = resolveTheme(container);
 
 	// Measure node label widths up-front so layouts can space nodes proportionally
-	// to their labels. Without this, vaults with long descriptive names ("Drakmir
+	// When labels are shown, measure their widths so layouts can space nodes
+	// proportionally — without this, vaults with long descriptive names ("Drakmir
 	// Axen, erster Sohn von Mornak") get overlapping labels because every node is
-	// treated as the same width by both fcose and dagre.
-	const labelWidths = measureLabelWidths(container, effectiveGraph, !!compact);
+	// treated as the same width. When labels are hidden there's nothing to
+	// measure, so we use an empty map and the layout packs nodes by circle size.
+	const labelWidths = showLabels
+		? measureLabelWidths(container, effectiveGraph, !!compact)
+		: new Map<string, number>();
 	// Stash on node data so the family-graph layout (which reads from the cy instance,
 	// not from `graph`) can access it cheaply via `node.data("labelWidth")`.
 	for (const el of elements) {
@@ -245,7 +254,7 @@ export function renderGraph(opts: RenderOptions): Core {
 	const cy = cytoscape({
 		container,
 		elements,
-		style: buildStyle(theme, !!compact),
+		style: buildStyle(theme, !!compact, showLabels),
 		layout: initialLayout,
 		minZoom: 0.1,
 		maxZoom: 4,
@@ -440,7 +449,7 @@ function toCytoscape(graph: RelationsGraph, highlightId?: string): ElementDefini
  * Stylesheet uses only concrete color strings (resolved via readColor). No data() image
  * mapping — that's applied per-node after init.
  */
-function buildStyle(theme: ThemeColors, compact: boolean): Stylesheet[] {
+function buildStyle(theme: ThemeColors, compact: boolean, showLabels: boolean): Stylesheet[] {
 	// Compact mode shrinks every dimension so a useful graph fits in ~140px tall by ~240px wide.
 	const nodeSize        = compact ? 32 : 60;
 	const nodeSizeFocus   = compact ? 40 : 72;
@@ -453,7 +462,10 @@ function buildStyle(theme: ThemeColors, compact: boolean): Stylesheet[] {
 			selector: "node",
 			style: {
 				"background-color": theme.interactiveAccent,
-				"label": "data(label)",
+				// Empty label hides the text while keeping the node itself. We omit
+				// the label entirely (rather than setting visibility) so there's no
+				// reserved space or background pill where the text would be.
+				"label": showLabels ? "data(label)" : "",
 				"color": theme.textNormal,
 				"font-size": fontSize,
 				"font-weight": 500,
@@ -461,12 +473,12 @@ function buildStyle(theme: ThemeColors, compact: boolean): Stylesheet[] {
 				"text-halign": "center",
 				"text-margin-y": labelMargin,
 				"text-background-color": theme.bgPrimary,
-				"text-background-opacity": 0.95,
+				"text-background-opacity": showLabels ? 0.95 : 0,
 				"text-background-padding": labelPadding,
 				"text-background-shape": "roundrectangle",
 				"text-border-color": theme.bgModBorder,
-				"text-border-width": 1,
-				"text-border-opacity": 1,
+				"text-border-width": showLabels ? 1 : 0,
+				"text-border-opacity": showLabels ? 1 : 0,
 				"width": nodeSize,
 				"height": nodeSize,
 				"border-width": 2,

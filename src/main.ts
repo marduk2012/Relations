@@ -129,6 +129,9 @@ export default class RelationsPlugin extends Plugin {
 		if (typeof this.settings.animateLayout !== "boolean") {
 			this.settings.animateLayout = DEFAULT_SETTINGS.animateLayout;
 		}
+		if (typeof this.settings.showNodeLabels !== "boolean") {
+			this.settings.showNodeLabels = DEFAULT_SETTINGS.showNodeLabels;
+		}
 	}
 
 	async saveSettings(): Promise<void> {

@@ -19,6 +19,8 @@ interface CodeBlockOptions {
 	                        // Centered on the active/host note's family neighbourhood.
 	zoom?: number;
 	height?: string;          // overrides the size's default height; e.g. "800px", "60vh"
+	labels?: boolean;         // show note name under each node; overrides the global
+	                          // showNodeLabels setting for this block only
 }
 
 const DEFAULTS: CodeBlockOptions = {
@@ -136,6 +138,7 @@ class RelationsBlockChild extends MarkdownRenderChild {
 			familyGraph: this.options.familyGraph,
 			compact: effectiveSize === "mini",
 			zoomMultiplier: this.options.zoom,
+			showLabels: this.options.labels,
 		});
 
 		// Legend — every size except mini, and only when settings.showLegend is on.
@@ -245,6 +248,10 @@ function parseOptions(source: string): ParsedOptions {
 	const familyGraph = parsed["family-graph"] === true || parsed["familyGraph"] === true;
 	const center = typeof parsed["center"] === "string" ? (parsed["center"] as string) : undefined;
 
+	// labels: explicit true/false hides or shows note names for this block,
+	// overriding the global setting. Undefined = inherit the setting.
+	const labels = typeof parsed["labels"] === "boolean" ? (parsed["labels"] as boolean) : undefined;
+
 	// Zoom: accept a number (1.4) or a string ending in "%" ("140%"). Out-of-range
 	// values are clamped to a sensible window — going past 5x mostly hurts.
 	let zoom: number | undefined;
@@ -277,7 +284,7 @@ function parseOptions(source: string): ParsedOptions {
 		}
 	}
 
-	return { ...DEFAULTS, size, depth, scope, tree, familyGraph, center, zoom, height, sizeExplicit };
+	return { ...DEFAULTS, size, depth, scope, tree, familyGraph, center, zoom, height, labels, sizeExplicit };
 }
 
 function resolveHostFile(app: App, hostPath: string, sourcePath: string): TFile | null {

@@ -120,6 +120,7 @@ The empty block uses sensible defaults — direct neighbours of the host note, m
 | `zoom`        | `1.0`, `1.4` for mini  | zoom multiplier applied after fit. `1.5` or `"150%"` zooms in 50%             |
 | `height`      | size default           | override the embed's height. Accepts `px`, `em`, `rem`, `vh`, `vw`, or `%`     |
 | `center`      | host note              | wikilink or path of a different note to focus on, e.g. `"[[King Arthur]]"`     |
+| `labels`      | (inherits setting)     | `true`/`false` to show or hide note names under nodes for this block, overriding the global **Show node labels** setting |
 
 ## Family-graph mode
 

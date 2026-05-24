@@ -26,6 +26,11 @@ export interface RelationsSettings {
 	showLegend: boolean;
 	layout: "fcose" | "cose" | "dagre";
 
+	// Whether to show the note name under each node. Some users prefer a cleaner
+	// portrait-only graph, especially when nodes have recognisable images. Can be
+	// overridden per code-block with `labels: false`.
+	showNodeLabels: boolean;
+
 	// Local graph: how many hops out from the active note
 	localGraphDepth: number;
 
@@ -64,6 +69,7 @@ export const DEFAULT_SETTINGS: RelationsSettings = {
 	requiredTags: [],
 	showLegend: true,
 	layout: "fcose",
+	showNodeLabels: true,
 	localGraphDepth: 2,
 	animateLayout: true,
 };
