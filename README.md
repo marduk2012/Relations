@@ -7,10 +7,10 @@
 Visualise relationships between notes — for **worldbuilding**, **fiction**, **TTRPG campaigns**, **genealogies**, or any project where seeing how things connect matters. Note-driven via frontmatter, with portraits, typed line styles, a focused family view, and embeddable graphs that work inside callouts and infoboxes.
 
 Relations standard graph view:
-<img width="1123" height="610" alt="ucOs475xnH" src="https://github.com/user-attachments/assets/8e78973b-575a-4f3a-a877-8b22e59db822" />
+<img width="816" height="863" alt="RFdUQRM2xC" src="https://github.com/user-attachments/assets/ab1aed71-e7cf-441e-8146-3b5460150b09" />
 
 Family-graph view
-<img width="816" height="863" alt="RFdUQRM2xC" src="https://github.com/user-attachments/assets/ab1aed71-e7cf-441e-8146-3b5460150b09" />
+<img width="1123" height="610" alt="ucOs475xnH" src="https://github.com/user-attachments/assets/8e78973b-575a-4f3a-a877-8b22e59db822" />
 
 
 [Install](#install) · [Quick start](#quick-start) · [Embedding](#embedding-a-graph-in-a-note) · [Family-graph mode](#family-graph-mode) · [Settings](#relationship-types)
