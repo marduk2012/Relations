@@ -6,12 +6,7 @@
 
 Visualise relationships between notes — for **worldbuilding**, **fiction**, **TTRPG campaigns**, **genealogies**, or any project where seeing how things connect matters. Note-driven via frontmatter, with portraits, typed line styles, a focused family view, and embeddable graphs that work inside callouts and infoboxes.
 
-Relations standard graph view:
-<img width="816" height="863" alt="RFdUQRM2xC" src="https://github.com/user-attachments/assets/ab1aed71-e7cf-441e-8146-3b5460150b09" />
-
-Family-graph view
-<img width="1123" height="610" alt="ucOs475xnH" src="https://github.com/user-attachments/assets/8e78973b-575a-4f3a-a877-8b22e59db822" />
-
+![Relations graph preview](docs/preview-graph.png)
 
 [Install](#install) · [Quick start](#quick-start) · [Embedding](#embedding-a-graph-in-a-note) · [Family-graph mode](#family-graph-mode) · [Settings](#relationship-types)
 
@@ -32,12 +27,6 @@ Useful for:
 - Anything else where you've got a cast of linked notes and want to *see* it
 
 ## Install
-
-### Via Community.Obsidian.md (recommended)
-
-Browse to: https://community.obsidian.md/plugins/relations
-
-Install the plugin
 
 ### Via BRAT (recommended)
 
@@ -132,6 +121,8 @@ The empty block uses sensible defaults — direct neighbours of the host note, m
 | `height`      | size default           | override the embed's height. Accepts `px`, `em`, `rem`, `vh`, `vw`, or `%`     |
 | `center`      | host note              | wikilink or path of a different note to focus on, e.g. `"[[King Arthur]]"`     |
 | `labels`      | (inherits setting)     | `true`/`false` to show or hide note names under nodes for this block, overriding the global **Show node labels** setting |
+| `spacing`     | `1.0` (`0.55` in mini) | family-graph only: node spacing multiplier. Lower = tighter tree with shorter edges and larger nodes (good for infoboxes); higher = more spread out. Range `0.2`–`3` |
+| `id`          | none                   | a stable identifier for this block. Required to **lock** the layout — see below |
 
 ## Family-graph mode
 
@@ -172,6 +163,49 @@ family-graph: true
 scope: full
 ```
 ````
+
+### Tightening the tree for small embeds
+
+In a narrow space — an infobox, a callout, a `mini` embed — the default spacing can leave nodes looking small and far apart, because the view zooms out to fit the whole tree. `mini` embeds already use tighter spacing automatically, but you can tune any embed with `spacing`:
+
+````markdown
+```relations
+size: small
+family-graph: true
+spacing: 0.5
+```
+````
+
+Lower values pull nodes closer together (shorter edges, larger nodes once the view fits); higher values spread them out. The accepted range is `0.2` to `3.0`.
+
+## Locking a layout in place
+
+By default the graph lays itself out automatically each time it renders — which means a force-directed graph can shuffle slightly between refreshes, and any nodes you drag around snap back when the note re-renders. To pin everything exactly where you want it:
+
+1. Drag the nodes into the arrangement you want.
+2. Hover the graph and click the **lock** button in the top-right corner.
+
+That's it. If the block doesn't already have an `id`, the plugin generates one (like `rel-7f3a9c2b`) and writes it into the code block for you — the id is what keys the saved positions, and having it in the block keeps the layout portable if you sync or share the note. You can rename it to something friendlier (e.g. `id: arthur-court`) any time.
+
+The node positions are saved (in the plugin's own data) and restored on every future render — surviving note refreshes, switching away and back, and restarting Obsidian. While locked, the auto-layout is skipped so nothing reshuffles.
+
+**Adjusting a locked layout.** You can keep dragging nodes after locking. When you've nudged things into a better arrangement, click the button again (it now shows a **save** icon) to capture the new positions — this updates the saved layout in place without resetting anything else, and without a disruptive re-render.
+
+**Resetting.** A separate **reset** button (the circular arrow, shown next to the save button while locked) clears the saved positions and returns the graph to automatic layout.
+
+If you'd rather set the `id` yourself up front, you still can:
+
+````markdown
+```relations
+size: large
+id: arthur-court
+```
+````
+
+Notes:
+- The `id` must be unique within your vault. Reusing the same `id` in two blocks makes them share one saved layout.
+- Locking is per-block, stored by `id` — editing other parts of the note won't disturb it.
+- If you add new related notes after locking, the new nodes appear via auto-layout while the locked ones stay put; drag them where you want and hit save to capture them.
 
 ## Relationship types
 
