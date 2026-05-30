@@ -32,6 +32,7 @@ export interface RenderOptions {
 	showLabels?: boolean;       // show the note name under each node. Defaults to the
 	                            // showNodeLabels setting; a code-block can override it.
 	spacing?: number;           // family-graph spacing multiplier (0.2–3.0)
+	presetPositions?: Record<string, { x: number; y: number }>;  // locked layout positions
 }
 
 interface ThemeColors {
@@ -273,7 +274,34 @@ export function renderGraph(opts: RenderOptions): Core {
 		autolock: false,
 	});
 
-	if (familyGraph) {
+	if (opts.presetPositions) {
+		const preset = opts.presetPositions;
+		const missing: string[] = [];
+		cy.nodes().forEach((node) => {
+			const saved = preset[node.id()];
+			if (saved) {
+				node.position({ x: saved.x, y: saved.y });
+			} else {
+				missing.push(node.id());
+			}
+		});
+		if (missing.length > 0 && familyGraph) {
+			const spacing = opts.spacing ?? (compact ? 0.55 : 1);
+			applyGenerationLayout(cy, graph, { spacing });
+			cy.nodes().forEach((node) => {
+				const saved = preset[node.id()];
+				if (saved) node.position({ x: saved.x, y: saved.y });
+			});
+		} else if (missing.length > 0) {
+			const xs = Object.values(preset).map((p) => p.x);
+			const ys = Object.values(preset).map((p) => p.y);
+			const startX = xs.length ? Math.max(...xs) + 120 : 0;
+			const startY = ys.length ? Math.min(...ys) : 0;
+			missing.forEach((id, idx) => {
+				cy.getElementById(id).position({ x: startX, y: startY + idx * 80 });
+			});
+		}
+	} else if (familyGraph) {
 		const spacing = opts.spacing ?? (compact ? 0.55 : 1);
 		applyGenerationLayout(cy, graph, { spacing });
 	}

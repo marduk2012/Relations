@@ -98,6 +98,17 @@ export interface RelationsGraph {
 	edges: GraphEdge[];
 }
 
+export interface LockedLayout {
+	locked: boolean;
+	positions: Record<string, { x: number; y: number }>;
+}
+
+export interface LayoutStore {
+	get(id: string): LockedLayout | null;
+	set(id: string, data: LockedLayout): Promise<void>;
+	clear(id: string): Promise<void>;
+}
+
 export const VIEW_TYPE_RELATIONS = "relations-graph";
 
 // Codeblock language tags. We register both — `relations` is the new canonical name,

@@ -4,15 +4,18 @@ import {
 	DEFAULT_SETTINGS,
 	VIEW_TYPE_RELATIONS,
 	RELATIONS_CODE_BLOCKS,
+	LayoutStore,
+	LockedLayout,
 } from "./types";
 import { RelationsView } from "./view";
 import { RelationsSettingTab } from "./settings";
 import { processRelationsBlock } from "./codeblock";
 import { GraphCache } from "./graph-cache";
 
-export default class RelationsPlugin extends Plugin {
+export default class RelationsPlugin extends Plugin implements LayoutStore {
 	settings!: RelationsSettings;
 	graphCache: GraphCache = new GraphCache();
+	private lockedLayouts: Record<string, LockedLayout> = {};
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -63,6 +66,9 @@ export default class RelationsPlugin extends Plugin {
 					"# family-graph: false # focused family view: parents above, partners level, children below\n" +
 					"# zoom: 1.0           # zoom multiplier; mini defaults to 1.4\n" +
 					"# height: 400px       # override embed height. px, em, rem, vh, vw, %\n" +
+					"# spacing: 1.0        # family-graph node spacing; <1 tighter, >1 looser\n" +
+					"# labels: true        # show note names under nodes\n" +
+					"# id: my-graph        # stable id; required to lock node positions in place\n" +
 					"# center: \"[[Other Note]]\"  # focus a different note\n" +
 					"```\n";
 				insertCodeBlock(editor, block);
@@ -77,7 +83,7 @@ export default class RelationsPlugin extends Plugin {
 			this.registerMarkdownCodeBlockProcessor(
 				lang,
 				(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-					processRelationsBlock(this.app, this.settings, source, el, ctx, this.graphCache);
+					processRelationsBlock(this.app, this.settings, source, el, ctx, this.graphCache, this);
 				},
 			);
 		}
@@ -101,7 +107,9 @@ export default class RelationsPlugin extends Plugin {
 
 	async loadSettings(): Promise<void> {
 		const loaded = await this.loadData();
+		this.lockedLayouts = loaded && typeof loaded.lockedLayouts === "object" && loaded.lockedLayouts || {};
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
+		delete (this.settings as unknown as Record<string, unknown>).lockedLayouts;
 		if (!Array.isArray(this.settings.relationshipTypes) || this.settings.relationshipTypes.length === 0) {
 			this.settings.relationshipTypes = DEFAULT_SETTINGS.relationshipTypes;
 		}
@@ -135,7 +143,25 @@ export default class RelationsPlugin extends Plugin {
 	}
 
 	async saveSettings(): Promise<void> {
-		await this.saveData(this.settings);
+		await this.persist();
+	}
+
+	private async persist(): Promise<void> {
+		await this.saveData({ ...this.settings, lockedLayouts: this.lockedLayouts });
+	}
+
+	get(id: string): LockedLayout | null {
+		return this.lockedLayouts[id] ?? null;
+	}
+
+	async set(id: string, data: LockedLayout): Promise<void> {
+		this.lockedLayouts[id] = data;
+		await this.persist();
+	}
+
+	async clear(id: string): Promise<void> {
+		delete this.lockedLayouts[id];
+		await this.persist();
 	}
 
 	refreshGraphView(): void {

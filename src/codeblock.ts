@@ -1,6 +1,6 @@
-import { App, MarkdownPostProcessorContext, MarkdownRenderChild, parseYaml, TFile } from "obsidian";
+import { App, MarkdownPostProcessorContext, MarkdownRenderChild, Notice, parseYaml, setIcon, TFile } from "obsidian";
 import { Core } from "cytoscape";
-import { RelationsSettings } from "./types";
+import { RelationsSettings, LayoutStore } from "./types";
 import { buildFullGraph, buildLocalGraph, buildFamilyNeighborhood } from "./graph";
 import { renderGraph } from "./render";
 import type { GraphCache } from "./graph-cache";
@@ -22,6 +22,7 @@ interface CodeBlockOptions {
 	labels?: boolean;         // show note name under each node; overrides the global
 	                          // showNodeLabels setting for this block only
 	spacing?: number;         // family-graph node spacing multiplier (0.2–3.0)
+	id?: string;              // stable block identifier for layout locking
 }
 
 const DEFAULTS: CodeBlockOptions = {
@@ -36,13 +37,16 @@ const DEFAULTS: CodeBlockOptions = {
  */
 class RelationsBlockChild extends MarkdownRenderChild {
 	private cy: Core | null = null;
+	private locked = false;
 	constructor(
 		containerEl: HTMLElement,
 		private app: App,
 		private settings: RelationsSettings,
 		private options: ParsedOptions,
+		private ctx: MarkdownPostProcessorContext,
 		private sourcePath: string,
 		private cache: GraphCache | null,
+		private store: LayoutStore | null,
 	) {
 		super(containerEl);
 	}
@@ -56,31 +60,106 @@ class RelationsBlockChild extends MarkdownRenderChild {
 		this.cy = null;
 	}
 
+	private async ensureBlockId(): Promise<string | null> {
+		if (this.options.id) return this.options.id;
+		const info = this.ctx.getSectionInfo(this.containerEl);
+		if (!info) return null;
+		const file = this.app.vault.getAbstractFileByPath(this.sourcePath);
+		if (!(file instanceof TFile)) return null;
+
+		const id = generateBlockId();
+		const content = (await this.app.vault.read(file)).split("\n");
+		const lineIdx = info.lineStart;
+		if (lineIdx < 0 || lineIdx >= content.length) return null;
+
+		const line = content[lineIdx];
+		const prefixMatch = line.match(/^(\s*(?:>\s?)*)/);
+		const prefix = prefixMatch ? prefixMatch[1] : "";
+		const fencePart = line.slice(prefix.length);
+		if (!/^`{3,}.*\brelations\b/.test(fencePart) && !/^`{3,}\s*npc-graph\b/.test(fencePart)) return null;
+
+		content.splice(lineIdx + 1, 0, `${prefix}id: ${id}`);
+		await this.app.vault.modify(file, content.join("\n"));
+		this.options.id = id;
+		return id;
+	}
+
+	private addLockControl(host: HTMLElement): void {
+		const group = host.createDiv({ cls: "relations-lock-group" });
+		const lockBtn = group.createEl("button", { cls: "relations-lock-btn" });
+		const resetBtn = group.createEl("button", { cls: "relations-lock-btn relations-reset-btn" });
+		setIcon(resetBtn, "rotate-ccw");
+		resetBtn.setAttribute("aria-label", "Reset to automatic layout");
+
+		const updateUI = () => {
+			lockBtn.toggleClass("is-locked", this.locked);
+			setIcon(lockBtn, this.locked ? "save" : "lock");
+			lockBtn.setAttribute("aria-label", this.locked ? "Save current positions" : "Lock layout in place");
+			resetBtn.toggleClass("is-hidden", !this.locked);
+			resetBtn.toggleClass("is-locked", this.locked);
+		};
+		updateUI();
+
+		const savePositions = async (): Promise<{ autoAddedId: boolean } | null> => {
+			if (!this.store || !this.cy) return null;
+			let id = this.options.id;
+			let autoAddedId = false;
+			if (!id) {
+				id = await this.ensureBlockId() ?? undefined;
+				if (!id) {
+					new Notice("Couldn't auto-add an id to this code block. Add one manually to lock it:\n\n```relations\nid: my-graph\n```", 9000);
+					return null;
+				}
+				autoAddedId = true;
+			}
+			const positions: Record<string, { x: number; y: number }> = {};
+			this.cy.nodes().forEach((n) => {
+				const pos = n.position();
+				positions[n.id()] = { x: pos.x, y: pos.y };
+			});
+			await this.store.set(id, { locked: true, positions });
+			return { autoAddedId };
+		};
+
+		lockBtn.addEventListener("click", async () => {
+			const wasLocked = this.locked;
+			const result = await savePositions();
+			if (result) {
+				this.locked = true;
+				updateUI();
+				if (result.autoAddedId) {
+					new Notice("Layout locked. Added an id to the code block so it persists across refreshes.");
+				} else {
+					new Notice(wasLocked ? "Layout updated." : "Layout locked. Positions will persist across refreshes.");
+				}
+			}
+		});
+
+		resetBtn.addEventListener("click", async () => {
+			if (!this.store || !this.options.id) return;
+			await this.store.clear(this.options.id);
+			this.locked = false;
+			this.render();
+			new Notice("Layout reset — back to automatic layout.");
+		});
+	}
+
 	private render(): void {
 		const el = this.containerEl;
 		el.empty();
 
-		// Auto-detect: any callout ancestor (ITS infobox, plain callouts, fas-infobox, etc.)
-		// gets the compact rendering treatment. The user can still override by explicitly
-		// setting size: small or size: large, but if they didn't set a size at all and
-		// the block is inside a callout, we promote them to mini.
 		const insideCallout = isInsideCallout(el);
 		let effectiveSize = this.options.size;
 		if (insideCallout && !this.options.sizeExplicit) {
 			effectiveSize = "mini";
 		}
 
-		// In mini mode, depth is always 1 — the canvas isn't big enough to show more
-		// usefully, and the user explicitly asked for "direct neighbors only".
 		const effectiveDepth = effectiveSize === "mini" ? 1 : this.options.depth;
 
 		el.addClass("relations-embed");
 		el.addClass(`is-${effectiveSize}`);
 		if (insideCallout) el.addClass("in-callout");
 
-		// Custom height overrides the size class. Both `height` and `min-height` get
-		// set so the size class's min-height (which would otherwise enforce a floor
-		// taller than what the user asked for) doesn't override us.
 		if (this.options.height) {
 			el.style.height = this.options.height;
 			el.style.minHeight = this.options.height;
@@ -94,11 +173,6 @@ class RelationsBlockChild extends MarkdownRenderChild {
 		let graph;
 		let highlightId: string | undefined;
 
-		// Family-tree and family-graph both focus on the host note specifically —
-		// Family-graph mode focuses on the host note specifically — same logic as
-		// the side-panel view: ignore scope/depth, build the host's family
-		// neighbourhood. `scope: full` still works as an opt-out for users who
-		// want the entire vault's family in one block.
 		const useFamilyNeighbourhood = this.options.familyGraph && this.options.scope !== "full";
 
 		if (useFamilyNeighbourhood) {
@@ -129,6 +203,10 @@ class RelationsBlockChild extends MarkdownRenderChild {
 			return;
 		}
 
+		const saved = this.options.id && this.store ? this.store.get(this.options.id) : null;
+		this.locked = !!(saved && saved.locked);
+		const presetPositions = this.locked && saved ? saved.positions : undefined;
+
 		this.cy = renderGraph({
 			app: this.app,
 			settings: this.settings,
@@ -141,11 +219,11 @@ class RelationsBlockChild extends MarkdownRenderChild {
 			zoomMultiplier: this.options.zoom,
 			showLabels: this.options.labels,
 			spacing: this.options.spacing,
+			presetPositions,
 		});
 
-		// Legend — every size except mini, and only when settings.showLegend is on.
-		// We only show entries for types that actually appear in the rendered graph,
-		// so a graph with two relationship types doesn't display nine swatches.
+		if (effectiveSize !== "mini") this.addLockControl(el);
+
 		if (effectiveSize !== "mini" && this.settings.showLegend) {
 			const usedTypes = new Set(graph.edges.map((e) => e.type));
 			const visibleTypes = this.settings.relationshipTypes.filter((t) => usedTypes.has(t.name));
@@ -155,6 +233,10 @@ class RelationsBlockChild extends MarkdownRenderChild {
 			}
 		}
 	}
+}
+
+function generateBlockId(): string {
+	return `rel-${Math.random().toString(16).slice(2, 10).padEnd(8, "0")}`;
 }
 
 /**
@@ -210,9 +292,10 @@ export function processRelationsBlock(
 	el: HTMLElement,
 	ctx: MarkdownPostProcessorContext,
 	cache: GraphCache | null = null,
+	store: LayoutStore | null = null,
 ): void {
 	const options = parseOptions(source);
-	const child = new RelationsBlockChild(el, app, settings, options, ctx.sourcePath, cache);
+	const child = new RelationsBlockChild(el, app, settings, options, ctx, ctx.sourcePath, cache, store);
 	ctx.addChild(child);
 }
 
@@ -296,7 +379,15 @@ function parseOptions(source: string): ParsedOptions {
 		if (isFinite(sp)) spacing = Math.max(0.2, Math.min(3, sp));
 	}
 
-	return { ...DEFAULTS, size, depth, scope, tree, familyGraph, center, zoom, height, labels, spacing, sizeExplicit };
+	// Block id: stable identifier for layout locking. Accept string or number.
+	const rawId = parsed["id"];
+	const id = typeof rawId === "string" && rawId.trim()
+		? rawId.trim()
+		: typeof rawId === "number"
+			? String(rawId)
+			: undefined;
+
+	return { ...DEFAULTS, size, depth, scope, tree, familyGraph, center, zoom, height, labels, spacing, id, sizeExplicit };
 }
 
 function resolveHostFile(app: App, hostPath: string, sourcePath: string): TFile | null {
