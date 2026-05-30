@@ -31,6 +31,8 @@ export interface RenderOptions {
 	zoomMultiplier?: number;    // applied AFTER fit; >1 zooms in, <1 zooms out. Default 1.
 	showLabels?: boolean;       // show the note name under each node. Defaults to the
 	                            // showNodeLabels setting; a code-block can override it.
+	spacing?: number;           // family-graph spacing multiplier (0.2–3.0)
+	presetPositions?: Record<string, { x: number; y: number }>;  // locked layout positions
 }
 
 interface ThemeColors {
@@ -247,7 +249,8 @@ export function renderGraph(opts: RenderOptions): Core {
 	//   arrowed for genealogy).
 	//
 	// Otherwise: standard pickLayout.
-	const initialLayout = familyGraph
+	const hasPresets = !!opts.presetPositions && Object.keys(opts.presetPositions).length > 0;
+	const initialLayout = (familyGraph || hasPresets)
 		? ({ name: "preset" } as cytoscape.LayoutOptions)
 		: pickLayout(settings, useTreeLayout, effectiveGraph, !!compact, labelWidths);
 
@@ -272,13 +275,36 @@ export function renderGraph(opts: RenderOptions): Core {
 		autolock: false,
 	});
 
-	if (familyGraph) {
-		// Compute generation-aligned positions. Pass the original `graph` (with
-		// genealogy/pair edges intact) since the algorithm needs them to figure
-		// out family structure — `effectiveGraph` already had its edges replaced
-		// with our inverted/synthesized version which is for rendering, not for
-		// structural reasoning.
-		applyGenerationLayout(cy, graph);
+	if (hasPresets) {
+		const preset = opts.presetPositions!;
+		const missing: string[] = [];
+		cy.nodes().forEach((node) => {
+			const saved = preset[node.id()];
+			if (saved) {
+				node.position({ x: saved.x, y: saved.y });
+			} else {
+				missing.push(node.id());
+			}
+		});
+		if (missing.length > 0 && familyGraph) {
+			const spacing = opts.spacing ?? (compact ? 0.55 : 1);
+			applyGenerationLayout(cy, graph, { spacing });
+			cy.nodes().forEach((node) => {
+				const saved = preset[node.id()];
+				if (saved) node.position({ x: saved.x, y: saved.y });
+			});
+		} else if (missing.length > 0) {
+			const xs = Object.values(preset).map((p) => p.x);
+			const ys = Object.values(preset).map((p) => p.y);
+			const startX = xs.length ? Math.max(...xs) + 120 : 0;
+			const startY = ys.length ? Math.min(...ys) : 0;
+			missing.forEach((id, idx) => {
+				cy.getElementById(id).position({ x: startX, y: startY + idx * 80 });
+			});
+		}
+	} else if (familyGraph) {
+		const spacing = opts.spacing ?? (compact ? 0.55 : 1);
+		applyGenerationLayout(cy, graph, { spacing });
 	}
 
 	// Apply per-node image styles after init. We do this here (not in the stylesheet
@@ -424,7 +450,7 @@ function toCytoscape(graph: RelationsGraph, highlightId?: string): ElementDefini
 	for (const e of graph.edges) {
 		const classes: string[] = [];
 		if (e.pair) classes.push("pair");
-		// Apply a class for any non-solid line style. Solid is the default.
+		if (e.genealogy) classes.push("genealogy");
 		if (e.lineStyle && e.lineStyle !== "solid") {
 			classes.push(`ls-${e.lineStyle}`);
 		}
