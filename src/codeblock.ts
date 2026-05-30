@@ -21,8 +21,8 @@ interface CodeBlockOptions {
 	height?: string;          // overrides the size's default height; e.g. "800px", "60vh"
 	labels?: boolean;         // show note name under each node; overrides the global
 	                          // showNodeLabels setting for this block only
-	spacing?: number;         // family-graph node spacing multiplier (0.2–3.0)
-	id?: string;              // stable block identifier for layout locking
+	spacing?: number;
+	id?: string;
 }
 
 const DEFAULTS: CodeBlockOptions = {
