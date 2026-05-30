@@ -31,6 +31,7 @@ export interface RenderOptions {
 	zoomMultiplier?: number;    // applied AFTER fit; >1 zooms in, <1 zooms out. Default 1.
 	showLabels?: boolean;       // show the note name under each node. Defaults to the
 	                            // showNodeLabels setting; a code-block can override it.
+	spacing?: number;           // family-graph spacing multiplier (0.2–3.0)
 }
 
 interface ThemeColors {
@@ -273,12 +274,8 @@ export function renderGraph(opts: RenderOptions): Core {
 	});
 
 	if (familyGraph) {
-		// Compute generation-aligned positions. Pass the original `graph` (with
-		// genealogy/pair edges intact) since the algorithm needs them to figure
-		// out family structure — `effectiveGraph` already had its edges replaced
-		// with our inverted/synthesized version which is for rendering, not for
-		// structural reasoning.
-		applyGenerationLayout(cy, graph);
+		const spacing = opts.spacing ?? (compact ? 0.55 : 1);
+		applyGenerationLayout(cy, graph, { spacing });
 	}
 
 	// Apply per-node image styles after init. We do this here (not in the stylesheet

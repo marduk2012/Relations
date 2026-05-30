@@ -64,7 +64,17 @@ const NODE_NOMINAL_WIDTH = 140; // a typical labeled-portrait's footprint
  * connections, with edge styles (solid for marriage, dotted for informal,
  * arrowed for parent→child) defined in the stylesheet.
  */
-export function applyGenerationLayout(cy: Core, graph: RelationsGraph): void {
+export function applyGenerationLayout(
+	cy: Core,
+	graph: RelationsGraph,
+	opts: { spacing?: number } = {},
+): void {
+	const sp = Math.max(0.2, Math.min(3, opts.spacing ?? 1));
+	const genHeight = GEN_HEIGHT * sp;
+	const siblingGap = SIBLING_GAP * sp;
+	const cousinGap = COUSIN_GAP * sp;
+	const spouseGap = SPOUSE_GAP * sp;
+	const nodeWidth = NODE_NOMINAL_WIDTH * Math.sqrt(sp);
 	// 1. Build adjacency: for every node, what are its parents (genealogy edges
 	//    with this node as source) and who is it paired with (pair edges).
 	const parentsOf = new Map<string, string[]>();
@@ -243,16 +253,16 @@ export function applyGenerationLayout(cy: Core, graph: RelationsGraph): void {
 		for (let i = 0; i < unit.children.length; i++) {
 			const c = unit.children[i];
 			const ownUnits = downstreamUnitsByParent.get(c) ?? [];
-			let cw = NODE_NOMINAL_WIDTH;
+			let cw = nodeWidth;
 			for (const downstream of ownUnits) {
 				cw = Math.max(cw, subtreeWidth(downstream));
 			}
 			childrenWidth += cw;
-			if (i < unit.children.length - 1) childrenWidth += SIBLING_GAP;
+			if (i < unit.children.length - 1) childrenWidth += siblingGap;
 		}
 		const parentsWidth = unit.parents.length === 2
-			? SPOUSE_GAP + NODE_NOMINAL_WIDTH
-			: NODE_NOMINAL_WIDTH;
+			? spouseGap + nodeWidth
+			: nodeWidth;
 		const w = Math.max(parentsWidth, childrenWidth);
 		widthCache.set(unit.id, w);
 		unit.subtreeWidth = w;
@@ -274,12 +284,12 @@ export function applyGenerationLayout(cy: Core, graph: RelationsGraph): void {
 	let cursor = 0;
 	for (const root of roots) {
 		positionUnit(root, cursor + root.subtreeWidth / 2);
-		cursor += root.subtreeWidth + COUSIN_GAP;
+		cursor += root.subtreeWidth + cousinGap;
 	}
 
 	function positionUnit(unit: FamilyUnit, centerX: number): void {
 		unit.x = centerX;
-		unit.y = unit.generation * GEN_HEIGHT;
+		unit.y = unit.generation * genHeight;
 		positionedUnits.add(unit);
 		// Position children left-to-right under this unit.
 		const children = unit.children;
@@ -291,13 +301,13 @@ export function applyGenerationLayout(cy: Core, graph: RelationsGraph): void {
 		for (let i = 0; i < children.length; i++) {
 			const c = children[i];
 			const ownUnits = downstreamUnitsByParent.get(c) ?? [];
-			let cw = NODE_NOMINAL_WIDTH;
+			let cw = nodeWidth;
 			for (const downstream of ownUnits) {
 				cw = Math.max(cw, downstream.subtreeWidth);
 			}
 			childWidths.push(cw);
 			totalChildrenWidth += cw;
-			if (i < children.length - 1) totalChildrenWidth += SIBLING_GAP;
+			if (i < children.length - 1) totalChildrenWidth += siblingGap;
 		}
 
 		let childCursor = centerX - totalChildrenWidth / 2;
@@ -320,11 +330,11 @@ export function applyGenerationLayout(cy: Core, graph: RelationsGraph): void {
 				}
 			} else {
 				// Leaf child — write its position.
-				childPositions.set(c, { x: cx, y: (unit.generation + 1) * GEN_HEIGHT });
+				childPositions.set(c, { x: cx, y: (unit.generation + 1) * genHeight });
 			}
 
 			childCursor += cw;
-			if (i < children.length - 1) childCursor += SIBLING_GAP;
+			if (i < children.length - 1) childCursor += siblingGap;
 		}
 	}
 
@@ -345,11 +355,11 @@ export function applyGenerationLayout(cy: Core, graph: RelationsGraph): void {
 		if (unit.parents.length === 2) {
 			const [left, right] = unit.parents;
 			if (canonicalUnitOf.get(left) === unit) {
-				cy.getElementById(left).position({ x: unit.x - SPOUSE_GAP / 2, y: unit.y });
+				cy.getElementById(left).position({ x: unit.x - spouseGap / 2, y: unit.y });
 				positionedNodes.add(left);
 			}
 			if (canonicalUnitOf.get(right) === unit) {
-				cy.getElementById(right).position({ x: unit.x + SPOUSE_GAP / 2, y: unit.y });
+				cy.getElementById(right).position({ x: unit.x + spouseGap / 2, y: unit.y });
 				positionedNodes.add(right);
 			}
 		} else if (unit.parents.length === 1) {
@@ -372,7 +382,7 @@ export function applyGenerationLayout(cy: Core, graph: RelationsGraph): void {
 		const pos = cy.getElementById(node.id).position();
 		if (!pos) continue;
 		const gen = generationOf.get(node.id) ?? 0;
-		const y = gen * GEN_HEIGHT;
+		const y = gen * genHeight;
 		if (!nodesByGenY.has(y)) nodesByGenY.set(y, []);
 		nodesByGenY.get(y)!.push({ id: node.id, x: pos.x });
 	}
@@ -409,7 +419,7 @@ export function applyGenerationLayout(cy: Core, graph: RelationsGraph): void {
 		// If the preferred side is blocked by another node, we fall through to
 		// the other side and then to wider offsets.
 		const formal = unit.parentsAreMarried;
-		const baseGap = isChildless ? SPOUSE_GAP : SPOUSE_GAP * 1.5;
+		const baseGap = isChildless ? spouseGap : spouseGap * 1.5;
 		const offsets = formal
 			? [-baseGap, baseGap, -baseGap * (isChildless ? 1.5 : 0.67), baseGap * (isChildless ? 1.5 : 0.67)]
 			: [ baseGap, -baseGap,  baseGap * (isChildless ? 1.5 : 0.67), -baseGap * (isChildless ? 1.5 : 0.67)];
@@ -417,7 +427,7 @@ export function applyGenerationLayout(cy: Core, graph: RelationsGraph): void {
 		let chosenX = placedPos.x + offsets[0];
 		for (const off of offsets) {
 			const tx = placedPos.x + off;
-			const conflict = sameRow.some((n) => n.id !== orphanId && Math.abs(n.x - tx) < SPOUSE_GAP * 0.6);
+			const conflict = sameRow.some((n) => n.id !== orphanId && Math.abs(n.x - tx) < spouseGap * 0.6);
 			if (!conflict) { chosenX = tx; break; }
 		}
 		cy.getElementById(orphanId).position({ x: chosenX, y: placedPos.y });
@@ -433,12 +443,12 @@ export function applyGenerationLayout(cy: Core, graph: RelationsGraph): void {
 
 	// 11. Place any orphan nodes (no genealogy edges, no pair edges) off to one
 	//     side so they're visible but don't crowd the tree.
-	let orphanCursor = cursor + COUSIN_GAP;
+	let orphanCursor = cursor + cousinGap;
 	for (const node of graph.nodes) {
 		const inFamily = parentsOf.has(node.id) || downstreamUnitsByParent.has(node.id) || pairsOf.has(node.id);
 		if (!inFamily) {
 			cy.getElementById(node.id).position({ x: orphanCursor, y: 0 });
-			orphanCursor += NODE_NOMINAL_WIDTH + COUSIN_GAP;
+			orphanCursor += nodeWidth + cousinGap;
 		}
 	}
 

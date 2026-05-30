@@ -21,6 +21,7 @@ interface CodeBlockOptions {
 	height?: string;          // overrides the size's default height; e.g. "800px", "60vh"
 	labels?: boolean;         // show note name under each node; overrides the global
 	                          // showNodeLabels setting for this block only
+	spacing?: number;         // family-graph node spacing multiplier (0.2–3.0)
 }
 
 const DEFAULTS: CodeBlockOptions = {
@@ -139,6 +140,7 @@ class RelationsBlockChild extends MarkdownRenderChild {
 			compact: effectiveSize === "mini",
 			zoomMultiplier: this.options.zoom,
 			showLabels: this.options.labels,
+			spacing: this.options.spacing,
 		});
 
 		// Legend — every size except mini, and only when settings.showLegend is on.
@@ -284,7 +286,17 @@ function parseOptions(source: string): ParsedOptions {
 		}
 	}
 
-	return { ...DEFAULTS, size, depth, scope, tree, familyGraph, center, zoom, height, labels, sizeExplicit };
+	// Spacing: family-graph node spacing multiplier. Accept number or string, clamp to 0.2–3.0.
+	let spacing: number | undefined;
+	const rawSpacing = parsed["spacing"];
+	if (typeof rawSpacing === "number" && isFinite(rawSpacing)) {
+		spacing = Math.max(0.2, Math.min(3, rawSpacing));
+	} else if (typeof rawSpacing === "string") {
+		const sp = parseFloat(rawSpacing.trim());
+		if (isFinite(sp)) spacing = Math.max(0.2, Math.min(3, sp));
+	}
+
+	return { ...DEFAULTS, size, depth, scope, tree, familyGraph, center, zoom, height, labels, spacing, sizeExplicit };
 }
 
 function resolveHostFile(app: App, hostPath: string, sourcePath: string): TFile | null {
