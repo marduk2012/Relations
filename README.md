@@ -4,11 +4,11 @@
 
 **See how your notes connect.**
 
-Visualise relationships between notes — for **worldbuilding**, **fiction**, **TTRPG campaigns**, **genealogies**, or any project where seeing how things connect matters. Note-driven via frontmatter, with portraits, typed line styles, a focused family view, and embeddable graphs that work inside callouts and infoboxes.
+Visualise relationships between notes — for **worldbuilding**, **fiction**, **TTRPG campaigns**, **genealogies**, or any project where seeing how things connect matters. Note-driven via frontmatter, with portraits, typed line styles, true family-tree and graph-style family views, and embeddable graphs that work inside callouts and infoboxes.
 
-![Relations graph preview](docs/preview-graph.png)
+<img width="709" height="810" alt="image" src="https://github.com/user-attachments/assets/938811de-7ead-4468-a994-87059f815126" />
 
-[Install](#install) · [Quick start](#quick-start) · [Embedding](#embedding-a-graph-in-a-note) · [Family-graph mode](#family-graph-mode) · [Settings](#relationship-types)
+[Install](#install) · [Quick start](#quick-start) · [Embedding](#embedding-a-graph-in-a-note) · [Family views](#family-views) · [Legend](#the-legend) · [Settings](#relationship-types)
 
 </div>
 
@@ -27,6 +27,9 @@ Useful for:
 - Anything else where you've got a cast of linked notes and want to *see* it
 
 ## Install
+
+### Via Obsisian
+The plugin can be installed via the [Community.Obsidian.md](https://community.obsidian.md/plugins/relations) site or directly from within Obsidian. 
 
 ### Via BRAT (recommended)
 
@@ -95,7 +98,8 @@ depth: 1
 
 This is the killer feature for character sheets. Drop a `relations` block inside any callout — `[!info]`, `[!note]`, the popular **ITS Theme** infobox, the **Fancy a Story** fas-infobox, anything — and it auto-renders in compact "mini" mode: smaller portraits, no border, transparent background, tightly packed.
 
-![Inside an ITS infobox](docs/preview-infobox.png)
+<img width="1022" height="632" alt="image" src="https://github.com/user-attachments/assets/73b66b8a-78d9-4511-b135-bc40a0341c13" />
+
 
 ````markdown
 > [!infobox|right]
@@ -115,18 +119,28 @@ The empty block uses sensible defaults — direct neighbours of the host note, m
 | `size`        | `small`                | `mini` (~160px tall, infobox-friendly), `small` (~320px), `large` (~600px)    |
 | `depth`       | size-dependent         | hops from the focus note. `mini` is forced to 1; `small` defaults to 1; `large` defaults to 3 |
 | `scope`       | `local`                | `local` (this note + N hops) or `full` (entire vault)                          |
-| `tree`        | `false`                | force generic top-down dagre layout                                            |
-| `family-graph`| `false`                | family view: parents above the focus, partners on the same row, children below. See below. |
+| `tree`        | `false`                | generic top-down dagre layout for any graph — not family-specific              |
+| `family-graph`| `false`                | family view, **graph-style**: generation-aligned, drawn with Cytoscape edges (marriage / informal partnership / parent→child). [See below](#family-views). |
+| `family-tree` | `false`                | family view, **true tree**: generation-aligned, drawn with orthogonal right-angle connectors. [See below](#family-views). |
 | `zoom`        | `1.0`, `1.4` for mini  | zoom multiplier applied after fit. `1.5` or `"150%"` zooms in 50%             |
 | `height`      | size default           | override the embed's height. Accepts `px`, `em`, `rem`, `vh`, `vw`, or `%`     |
 | `center`      | host note              | wikilink or path of a different note to focus on, e.g. `"[[King Arthur]]"`     |
 | `labels`      | (inherits setting)     | `true`/`false` to show or hide note names under nodes for this block, overriding the global **Show node labels** setting |
-| `spacing`     | `1.0` (`0.55` in mini) | family-graph only: node spacing multiplier. Lower = tighter tree with shorter edges and larger nodes (good for infoboxes); higher = more spread out. Range `0.2`–`3` |
+| `spacing`     | `1.0` (`0.55` in mini) | family views only: node spacing multiplier. Lower = tighter tree with shorter edges and larger nodes (good for infoboxes); higher = more spread out. Range `0.2`–`3` |
 | `id`          | none                   | a stable identifier for this block. Required to **lock** the layout — see below |
 
-## Family-graph mode
+## Family views
 
-A focused family view for the host note. Generations are aligned in horizontal rows — parents above, the focus and any partners on the middle row, children below — with edges styled to distinguish marriage from informal partnership and parent from child.
+Relations has two layouts built for genealogy. Both are focused on the host note and align generations in horizontal rows — parents above, the focus and any partners on the middle row, children below. They differ only in **how connections are drawn**:
+
+- **`family-tree`** — a true family tree, with orthogonal right-angle connectors.
+- **`family-graph`** — the graph-style view, keeping Cytoscape's own typed edges.
+
+<img width="1018" height="652" alt="image" src="https://github.com/user-attachments/assets/bfe50628-7580-45ed-a6c0-18a09cb666e9" />
+
+<img width="1018" height="651" alt="image" src="https://github.com/user-attachments/assets/e06eeaf6-6479-4c95-8e40-da656d81f892" />
+
+(These are distinct from the plain `tree` option, which is a generic top-down dagre layout for *any* graph and has no family-specific logic.)
 
 ```yaml
 # Arthur's note
@@ -140,43 +154,65 @@ spouse:
 ````markdown
 ```relations
 size: large
-family-graph: true
+family-tree: true
 ```
 ````
 
-### What you'll see
+Swap `family-tree: true` for `family-graph: true` to get the graph-style version instead.
+
+### `family-tree` — a true family tree
+
+Bloodlines are drawn as classic right-angle connectors: a vertical drop from each parent couple, a horizontal distribution bar across the siblings, and an individual drop to each child. Marriage and partnership lines between partners keep their styled appearance (a heavy double line for `spouse`, a dotted line for an inferred partnership). The result reads like a hand-drawn family chart.
+
+### `family-graph` — the graph-style view
+
+Bloodlines stay as Cytoscape's own edges rather than right-angle connectors. This is the original family view — useful, compact, and quick to read, though less obviously "a tree":
 
 - **Solid line** between two people = declared marriage (any `pair`-flagged relationship like `spouse`)
-- **Dotted line** between two people = informal partnership — automatically inferred when two people share a child but have no declared marriage between them. You don't have to model this explicitly; just declare the child's parents, and a partnership line appears
+- **Dotted line** between two people = informal partnership (see below)
 - **Arrowed line** = parent → child (genealogy edge), pointing in the natural reading direction
-- **Declared spouses go to the LEFT** of the focus, **informal partners to the RIGHT** — a deterministic visual convention so the chart reads the same way every time, regardless of which order Obsidian indexed the frontmatter
-- **Only family appears** — ancestors, descendants, partners. Allies, enemies, mentors, and other relationship types are hidden so the family structure reads cleanly. Switch to the regular Full or Active-note views to see those
+
+### Shared behaviour
+
+Both views behave identically apart from the connector style:
+
+- **Informal partnership is inferred automatically.** When two people share a child but have no declared marriage between them, a dotted partnership line appears. You don't have to model it — just declare the child's parents. (This line also gets its own legend entry; see [The legend](#the-legend).)
+- **Declared spouses go to the LEFT** of the focus, **informal partners to the RIGHT** — a deterministic convention so the chart reads the same way every time, regardless of the order Obsidian indexed the frontmatter.
+- **Only family appears** — ancestors, descendants, partners. Allies, enemies, mentors and other types are hidden so the family structure reads cleanly. Switch to the Full or Active-note views to see those.
 
 ### Use `scope: full` to see everything
 
-By default `family-graph` builds a neighbourhood around the active note. To show the whole vault's family in one view, add `scope: full`:
+By default a family view builds a neighbourhood around the active note. To show the whole vault's family in one view, add `scope: full`:
 
 ````markdown
 ```relations
 size: large
-family-graph: true
+family-tree: true
 scope: full
 ```
 ````
 
 ### Tightening the tree for small embeds
 
-In a narrow space — an infobox, a callout, a `mini` embed — the default spacing can leave nodes looking small and far apart, because the view zooms out to fit the whole tree. `mini` embeds already use tighter spacing automatically, but you can tune any embed with `spacing`:
+In a narrow space — an infobox, a callout, a `mini` embed — the default spacing can leave nodes looking small and far apart, because the view zooms out to fit the whole tree. `mini` embeds already use tighter spacing automatically, but you can tune any family embed with `spacing`:
 
 ````markdown
 ```relations
 size: small
-family-graph: true
+family-tree: true
 spacing: 0.5
 ```
 ````
 
 Lower values pull nodes closer together (shorter edges, larger nodes once the view fits); higher values spread them out. The accepted range is `0.2` to `3.0`.
+
+## The legend
+
+When **Show legend** is enabled (Settings → Relations, on by default), non-`mini` graphs show a legend strip listing every relationship type present in the view, each with its colour swatch drawn in that type's line style, plus a small symbol for one-way (→) and paired (⚭) types.
+
+In a family view, the legend also gains an **informal partnership** entry — a dotted grey swatch — whenever the view contains an inferred (unmarried co-parent) partnership, so that automatically-drawn line is always explained.
+
+The legend can be turned off globally in settings, and is always hidden in `mini` embeds to save space.
 
 ## Locking a layout in place
 
@@ -216,7 +252,7 @@ Configure types in **Settings → Relations**. Each type has a name (= frontmatt
 | **Sym**      | Symmetric — declaring on either note creates the relationship both ways. Off = one-way (drawn with an arrow).           |
 | **Pair**     | Pulls paired nodes very close, with a heavy connector. Use for `spouse`, `partner`, `bonded`.                            |
 | **Tree**     | When this type dominates a graph (≥60% of edges), auto-switches to top-down layout.                                       |
-| **Gen**      | Genealogy — counts as a bloodline edge in family-graph mode. Typically `parent`.                                          |
+| **Gen**      | Genealogy — counts as a bloodline edge in the family views (`family-tree` / `family-graph`). Typically `parent`. |
 | **Line**     | `solid`, `dashed`, `dotted`, or `double`. Useful for marking "secret", "former", "rumored" relationships.               |
 
 Defaults shipped:
