@@ -2,9 +2,9 @@ import { App, TFile, Menu } from "obsidian";
 import cytoscape, { Core, ElementDefinition, LayoutOptions } from "cytoscape";
 import fcose from "cytoscape-fcose";
 import dagre from "cytoscape-dagre";
-import { RelationsGraph, RelationsSettings, GraphEdge, RelationshipType } from "./types";
+import { RelationsGraph, RelationsSettings, GraphEdge, RelationshipType, EdgeLabelStore, edgeLabelKey } from "./types";
 import { applyGenerationLayout } from "./family-tree";
-import { drawFamilyConnectors } from "./family-connectors";
+import { drawFamilyConnectors, OverlayLabelHooks } from "./family-connectors";
 
 type Stylesheet = cytoscape.StylesheetStyle;
 
@@ -37,6 +37,11 @@ export interface RenderOptions {
 	                            // showNodeLabels setting; a code-block can override it.
 	spacing?: number;           // family-graph spacing multiplier (0.2–3.0)
 	presetPositions?: Record<string, { x: number; y: number }>;  // locked layout positions
+	labelStore?: EdgeLabelStore | null;
+	                            // When provided, edge labels are loaded from and saved to this
+	                            // store. Double-clicking an edge opens an inline editor.
+	editableLabels?: boolean;   // gate the double-click editor. Defaults to false. Set true in
+	                            // contexts with enough room (non-mini embeds, side panel).
 }
 
 interface ThemeColors {
@@ -188,7 +193,24 @@ export function renderGraph(opts: RenderOptions): Core {
 		effectiveGraph = graph;
 	}
 
-	const elements = toCytoscape(effectiveGraph, highlightId);
+	const labelStore = opts.labelStore ?? null;
+	// Resolve symmetry from the configured relationship types (falling back to
+	// the edge's own flag). Used so symmetric pairs canonicalise the key
+	// direction: an "enemy" label set from A's note shows up from B's view too.
+	const typeIsSymmetric = (e: GraphEdge): boolean => {
+		const t = settings.relationshipTypes.find((rt) => rt.name === e.type);
+		if (t) return t.symmetric;
+		return e.symmetric ?? true;
+	};
+	const lookupLabel = (e: GraphEdge): string => {
+		if (!labelStore) return "";
+		// Synthetic informal-partnership edges don't have a canonical relationship
+		// type configured; labels on them aren't supported in this release.
+		if (e.type === INFORMAL_PARTNERSHIP_TYPE) return "";
+		return labelStore.getLabel(edgeLabelKey(e.source, e.type, e.target, typeIsSymmetric(e))) ?? "";
+	};
+
+	const elements = toCytoscape(effectiveGraph, highlightId, lookupLabel);
 	const theme = resolveTheme(container);
 
 	// Measure node label widths up-front so layouts can space nodes proportionally
@@ -281,7 +303,44 @@ export function renderGraph(opts: RenderOptions): Core {
 	// SVG connectors for the classic family-tree look. Graph mode keeps the
 	// Cytoscape edges (arrowed parent→child, relationship-typed line styles).
 	if (familyMode === "tree") {
-		drawFamilyConnectors(cy, graph, container, !!compact);
+		// Wire label hooks so the overlay can read existing labels for display
+		// and open the editor when a stem is double-clicked. Genealogy edges in
+		// the raw graph go child→parent (the child's note declares its parents
+		// in frontmatter) and are asymmetric, so the key direction is preserved.
+		//
+		// We resolve the genealogy type's name from one such edge — usually
+		// "parent" but the user can rename it in settings. Same type name as
+		// Cytoscape edges use elsewhere, so a "parent" label set in family-graph
+		// mode shows up in family-tree mode (and vice versa).
+		const genType = graph.edges.find((e) => e.genealogy)?.type ?? "parent";
+
+		// overlayRedraw is the redraw function returned by drawFamilyConnectors.
+		// The editor's onSave needs to call it because saving a label doesn't
+		// move any nodes — so the overlay's position-driven redraw loop won't
+		// fire on its own. Initialised to a no-op so the closure has something
+		// safe to call before drawFamilyConnectors returns, then reassigned.
+		let overlayRedraw: () => void = () => { /* no-op until set */ };
+
+		const overlayHooks: OverlayLabelHooks | null = (labelStore && opts.editableLabels) ? {
+			getGenealogyLabel: (child, parent) =>
+				labelStore.getLabel(edgeLabelKey(child, genType, parent, false)) ?? "",
+			editGenealogyLabel: (child, parent, clientX, clientY) => {
+				const key = edgeLabelKey(child, genType, parent, false);
+				openEdgeLabelEditor({
+					container,
+					clientX,
+					clientY,
+					current: labelStore.getLabel(key) ?? "",
+					placeholder: 'e.g. "estranged"',
+					onSave: async (value) => {
+						await labelStore.setLabel(key, value);
+						overlayRedraw();
+					},
+				});
+			},
+		} : null;
+
+		overlayRedraw = drawFamilyConnectors(cy, graph, container, !!compact, overlayHooks);
 	}
 
 	// Apply per-node image styles after init. We do this here (not in the stylesheet
@@ -390,7 +449,103 @@ export function renderGraph(opts: RenderOptions): Core {
 		menu.showAtMouseEvent(orig);
 	});
 
+	// Double-click an edge → open the inline label editor. Gated by
+	// editableLabels (off in mini embeds). Synthetic informal-partnership
+	// edges are skipped — they don't have a canonical configured type, so a
+	// label key would be ambiguous.
+	if (opts.editableLabels && labelStore) {
+		cy.on("dblclick", "edge", (evt) => {
+			const edge = evt.target;
+			const type = edge.data("type") as string;
+			if (type === INFORMAL_PARTNERSHIP_TYPE) return;
+			const source = edge.data("source") as string;
+			const target = edge.data("target") as string;
+			const symmetric = edge.data("symmetric") === "true";
+			const key = edgeLabelKey(source, type, target, symmetric);
+			const current = labelStore.getLabel(key) ?? "";
+
+			const orig = evt.originalEvent as MouseEvent;
+			openEdgeLabelEditor({
+				container,
+				clientX: orig.clientX,
+				clientY: orig.clientY,
+				current,
+				placeholder: 'e.g. "hates them 75%"',
+				onSave: async (value) => {
+					await labelStore.setLabel(key, value);
+					edge.data("userLabel", value);
+					if (value) edge.addClass("has-label");
+					else edge.removeClass("has-label");
+				},
+			});
+		});
+	}
+
 	return cy;
+}
+
+/**
+ * Floating text input that lets the user add or edit a short label on an
+ * edge. Absolutely-positioned inside the embed container so it tracks with
+ * scroll and resize. Saved on Enter or blur; cancelled with Escape. Empty
+ * input on save removes the label.
+ */
+function openEdgeLabelEditor(opts: {
+	container: HTMLElement;
+	clientX: number;
+	clientY: number;
+	current: string;
+	placeholder: string;
+	onSave: (value: string) => Promise<void> | void;
+}): void {
+	// Remove any prior editor before opening a new one — defensive in case a
+	// double-click fires while one's already open.
+	opts.container.querySelectorAll(".relations-edge-label-editor").forEach((el) => el.remove());
+
+	const containerRect = opts.container.getBoundingClientRect();
+	const input = document.createElement("input");
+	input.type = "text";
+	input.className = "relations-edge-label-editor";
+	input.value = opts.current;
+	input.placeholder = opts.placeholder;
+	input.maxLength = 80;
+	input.style.position = "absolute";
+	input.style.left = `${opts.clientX - containerRect.left}px`;
+	input.style.top = `${opts.clientY - containerRect.top}px`;
+	input.style.transform = "translate(-50%, -50%)";
+
+	let committed = false;
+	const commit = async () => {
+		if (committed) return;
+		committed = true;
+		try {
+			await opts.onSave(input.value);
+		} finally {
+			input.remove();
+		}
+	};
+	const cancel = () => {
+		if (committed) return;
+		committed = true;
+		input.remove();
+	};
+
+	input.addEventListener("keydown", (e) => {
+		if (e.key === "Enter") {
+			e.preventDefault();
+			void commit();
+		} else if (e.key === "Escape") {
+			e.preventDefault();
+			cancel();
+		}
+		// Don't let Obsidian's global hotkeys fire while typing in the editor.
+		e.stopPropagation();
+	});
+	input.addEventListener("blur", () => { void commit(); });
+
+	opts.container.appendChild(input);
+	input.focus();
+	input.select();
 }
 
 /**
@@ -411,7 +566,11 @@ function findScrollParent(el: HTMLElement): HTMLElement | Window {
 	return window;
 }
 
-function toCytoscape(graph: RelationsGraph, highlightId?: string): ElementDefinition[] {
+function toCytoscape(
+	graph: RelationsGraph,
+	highlightId?: string,
+	lookupLabel?: (e: GraphEdge) => string,
+): ElementDefinition[] {
 	const out: ElementDefinition[] = [];
 	for (const n of graph.nodes) {
 		out.push({
@@ -431,6 +590,11 @@ function toCytoscape(graph: RelationsGraph, highlightId?: string): ElementDefini
 		if (e.lineStyle && e.lineStyle !== "solid") {
 			classes.push(`ls-${e.lineStyle}`);
 		}
+		// userLabel: short inline label set via double-click. Cytoscape renders
+		// nothing for an empty string. has-label class gates the label styling
+		// so unlabelled edges don't allocate background pills.
+		const userLabel = lookupLabel ? lookupLabel(e) : "";
+		if (userLabel) classes.push("has-label");
 		out.push({
 			data: {
 				id: `${e.source}__${e.type}__${e.target}`,
@@ -441,6 +605,8 @@ function toCytoscape(graph: RelationsGraph, highlightId?: string): ElementDefini
 				directed: e.symmetric ? "false" : "true",
 				pair: e.pair ? "true" : "false",
 				lineStyle: e.lineStyle ?? "solid",
+				userLabel,
+				symmetric: e.symmetric ? "true" : "false",
 			},
 			classes: classes.join(" "),
 		});
@@ -513,6 +679,26 @@ function buildStyle(theme: ThemeColors, compact: boolean, showLabels: boolean): 
 				"line-style": "solid",
 				"curve-style": "bezier",
 				"opacity": 0.85,
+			},
+		},
+		{
+			// User-set inline label (e.g. "hates them 75%"). Only edges with
+			// has-label class get the label drawn — keeps the default look clean.
+			selector: "edge.has-label",
+			style: {
+				"label": "data(userLabel)",
+				"font-size": compact ? 9 : 11,
+				"font-weight": 500,
+				"color": theme.textNormal,
+				"text-background-color": theme.bgPrimary,
+				"text-background-opacity": 0.9,
+				"text-background-padding": "2px",
+				"text-background-shape": "roundrectangle",
+				"text-border-color": theme.bgModBorder,
+				"text-border-width": 1,
+				"text-border-opacity": 0.6,
+				"text-rotation": "autorotate",
+				"text-events": "yes",
 			},
 		},
 		{

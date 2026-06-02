@@ -31,6 +31,46 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      # Version-consistency guard. The tag that triggered this workflow MUST
+      # equal the version field in manifest.json. If they drift, BRAT surfaces
+      # a "Version mismatch detected" warning to every user — which is what
+      # happened with 0.15.1 (tag 0.15.1, manifest 0.15.0). We catch it here
+      # and fail the build loudly instead of shipping a broken release.
+      - name: Verify tag matches manifest.json
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          manifest_version=$(node -p "require('./manifest.json').version")
+          echo "Tag:              $tag"
+          echo "Manifest version: $manifest_version"
+          if [ "$tag" != "$manifest_version" ]; then
+            echo "::error::Tag ($tag) does not match manifest.json version ($manifest_version). Bump manifest.json, package.json, and versions.json before tagging."
+            exit 1
+          fi
+
+      # Same check for package.json. They should always move in lockstep, and a
+      # drift here is a sign the release was prepared by hand and might be
+      # missing other bumps.
+      - name: Verify tag matches package.json
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          pkg_version=$(node -p "require('./package.json').version")
+          if [ "$tag" != "$pkg_version" ]; then
+            echo "::error::Tag ($tag) does not match package.json version ($pkg_version)."
+            exit 1
+          fi
+
+      # versions.json maps each released version to its minAppVersion. BRAT and
+      # the Obsidian community-plugin catalogue both read it. A missing entry
+      # means future users can't determine compatibility for this version.
+      - name: Verify versions.json has tag entry
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          has_entry=$(node -p "Object.keys(require('./versions.json')).includes('$tag')")
+          if [ "$has_entry" != "true" ]; then
+            echo "::error::versions.json has no entry for $tag. Add it before tagging."
+            exit 1
+          fi
+
       - name: Install dependencies
         run: npm ci
 

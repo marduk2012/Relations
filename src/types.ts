@@ -114,6 +114,33 @@ export interface PositionStore {
 	clear(blockId: string): Promise<void>;
 }
 
+/**
+ * Persistence interface for short inline labels on relationship edges
+ * (e.g. "hates them 75%", "married 1485"). Labels are global across all
+ * blocks and views — an edge between A and B carries the same label
+ * everywhere it appears.
+ *
+ * Keys are built by `edgeLabelKey()` (below), which canonicalises direction
+ * for symmetric relationship types so A↔B and B↔A resolve to the same label.
+ */
+export interface EdgeLabelStore {
+	getLabel(key: string): string | null;
+	setLabel(key: string, label: string): Promise<void>;
+	clearLabel(key: string): Promise<void>;
+}
+
+/**
+ * Canonical key for an edge label. For symmetric relationship types we sort
+ * the endpoints so `[A, enemy, B]` and `[B, enemy, A]` map to the same key.
+ * For asymmetric types (e.g. `parent`) direction is preserved.
+ */
+export function edgeLabelKey(source: string, type: string, target: string, symmetric: boolean): string {
+	if (symmetric && source > target) {
+		[source, target] = [target, source];
+	}
+	return `${source}__${type}__${target}`;
+}
+
 export const VIEW_TYPE_RELATIONS = "relations-graph";
 
 // Codeblock language tags. We register both — `relations` is the new canonical name,

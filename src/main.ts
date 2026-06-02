@@ -6,16 +6,20 @@ import {
 	RELATIONS_CODE_BLOCKS,
 	PositionStore,
 	LockedLayout,
+	EdgeLabelStore,
 } from "./types";
 import { RelationsView } from "./view";
 import { RelationsSettingTab } from "./settings";
 import { processRelationsBlock } from "./codeblock";
 import { GraphCache } from "./graph-cache";
 
-export default class RelationsPlugin extends Plugin implements PositionStore {
+export default class RelationsPlugin extends Plugin implements PositionStore, EdgeLabelStore {
 	settings!: RelationsSettings;
 	graphCache: GraphCache = new GraphCache();
 	private lockedLayouts: Record<string, LockedLayout> = {};
+	// Inline edge labels keyed by `edgeLabelKey(source, type, target, symmetric)`.
+	// Persisted in data.json alongside settings. Global across all blocks and views.
+	private edgeLabels: Record<string, string> = {};
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -83,7 +87,7 @@ export default class RelationsPlugin extends Plugin implements PositionStore {
 			this.registerMarkdownCodeBlockProcessor(
 				lang,
 				(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-					processRelationsBlock(this.app, this.settings, source, el, ctx, this.graphCache, this);
+					processRelationsBlock(this.app, this.settings, source, el, ctx, this.graphCache, this, this);
 				},
 			);
 		}
@@ -108,8 +112,10 @@ export default class RelationsPlugin extends Plugin implements PositionStore {
 	async loadSettings(): Promise<void> {
 		const loaded = await this.loadData();
 		this.lockedLayouts = loaded && typeof loaded.lockedLayouts === "object" && loaded.lockedLayouts || {};
+		this.edgeLabels = loaded && typeof loaded.edgeLabels === "object" && loaded.edgeLabels || {};
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
 		delete (this.settings as unknown as Record<string, unknown>).lockedLayouts;
+		delete (this.settings as unknown as Record<string, unknown>).edgeLabels;
 		if (!Array.isArray(this.settings.relationshipTypes) || this.settings.relationshipTypes.length === 0) {
 			this.settings.relationshipTypes = DEFAULT_SETTINGS.relationshipTypes;
 		}
@@ -147,7 +153,11 @@ export default class RelationsPlugin extends Plugin implements PositionStore {
 	}
 
 	private async persist(): Promise<void> {
-		await this.saveData({ ...this.settings, lockedLayouts: this.lockedLayouts });
+		await this.saveData({
+			...this.settings,
+			lockedLayouts: this.lockedLayouts,
+			edgeLabels: this.edgeLabels,
+		});
 	}
 
 	get(blockId: string): LockedLayout | null {
@@ -161,6 +171,29 @@ export default class RelationsPlugin extends Plugin implements PositionStore {
 
 	async clear(blockId: string): Promise<void> {
 		delete this.lockedLayouts[blockId];
+		await this.persist();
+	}
+
+	// EdgeLabelStore implementation: inline labels on relationship edges
+	// (e.g. "hates them 75%"). Stored in plugin data, global across views.
+	getLabel(key: string): string | null {
+		return this.edgeLabels[key] ?? null;
+	}
+
+	async setLabel(key: string, label: string): Promise<void> {
+		const trimmed = label.trim();
+		if (trimmed) {
+			this.edgeLabels[key] = trimmed;
+		} else {
+			// Empty/whitespace-only label means "remove the label" — equivalent to
+			// clearLabel. Lets the editor delete a label by clearing the input.
+			delete this.edgeLabels[key];
+		}
+		await this.persist();
+	}
+
+	async clearLabel(key: string): Promise<void> {
+		delete this.edgeLabels[key];
 		await this.persist();
 	}
 

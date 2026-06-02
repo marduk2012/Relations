@@ -1,6 +1,6 @@
 import { App, MarkdownPostProcessorContext, MarkdownRenderChild, Notice, parseYaml, setIcon, TFile } from "obsidian";
 import { Core } from "cytoscape";
-import { RelationsSettings, PositionStore, RelationshipType } from "./types";
+import { RelationsSettings, PositionStore, EdgeLabelStore, RelationshipType } from "./types";
 import { buildFullGraph, buildLocalGraph, buildFamilyNeighborhood } from "./graph";
 import { renderGraph, synthesizeInformalPartnerships, INFORMAL_PARTNERSHIP_LEGEND } from "./render";
 import type { GraphCache } from "./graph-cache";
@@ -48,6 +48,7 @@ class RelationsBlockChild extends MarkdownRenderChild {
 		private ctx: MarkdownPostProcessorContext,
 		private cache: GraphCache | null,
 		private store: PositionStore | null,
+		private labelStore: EdgeLabelStore | null = null,
 	) {
 		super(containerEl);
 	}
@@ -228,6 +229,10 @@ class RelationsBlockChild extends MarkdownRenderChild {
 			showLabels: this.options.labels,
 			spacing: this.options.spacing,
 			presetPositions,
+			labelStore: this.labelStore,
+			// No room for a label editor in mini embeds, and double-click in a
+			// tiny graph is more likely to be an accident than intent.
+			editableLabels: effectiveSize !== "mini",
 		});
 
 		if (effectiveSize !== "mini") this.addLockControl(el);
@@ -307,9 +312,10 @@ export function processRelationsBlock(
 	ctx: MarkdownPostProcessorContext,
 	cache: GraphCache | null = null,
 	store: PositionStore | null = null,
+	labelStore: EdgeLabelStore | null = null,
 ): void {
 	const options = parseOptions(source);
-	const child = new RelationsBlockChild(el, app, settings, options, ctx, cache, store);
+	const child = new RelationsBlockChild(el, app, settings, options, ctx, cache, store, labelStore);
 	ctx.addChild(child);
 }
 

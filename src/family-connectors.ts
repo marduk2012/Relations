@@ -9,16 +9,40 @@ interface FamilyGroup {
 }
 
 /**
+ * Hooks for rendering and editing inline labels on overlay connectors.
+ *
+ * The overlay doesn't import the EdgeLabelStore or the editor UI directly —
+ * those live in render.ts, where the key derivation and editor function are
+ * already plumbed for the Cytoscape edges. The overlay just asks the hooks
+ * for the current label text on a child→parent stem, and calls the hook to
+ * open the editor when the user double-clicks.
+ *
+ * For a child with multiple parents, the overlay shows one combined label
+ * per stem (each parent edge can carry a separate label; concatenated with
+ * " / " if both do). Double-click edits whichever parent edge currently
+ * holds the label; if neither does, the editor opens for the first parent.
+ */
+export interface OverlayLabelHooks {
+	getGenealogyLabel(child: string, parent: string): string;
+	editGenealogyLabel(child: string, parent: string, clientX: number, clientY: number): void;
+}
+
+/**
  * Orthogonal SVG connector overlay for family-graph mode.
  * Replaces Cytoscape's bezier genealogy edges with right-angle paths and
  * adds spouse-lockstep drag. Call after `applyGenerationLayout`.
+ *
+ * Returns a `redraw` function the caller can invoke when a label is saved
+ * (since label changes don't move any nodes, the position-driven redraw
+ * loop won't fire on its own). Callers without labels can ignore it.
  */
 export function drawFamilyConnectors(
 	cy: Core,
 	graph: RelationsGraph,
 	container: HTMLElement,
 	compact: boolean,
-): void {
+	labelHooks: OverlayLabelHooks | null = null,
+): () => void {
 	cy.edges(".genealogy").style("opacity", 0);
 
 	const groups = buildFamilyGroups(graph);
@@ -27,11 +51,12 @@ export function drawFamilyConnectors(
 	// All connectors share one color — per-genealogy-type differentiation not yet supported.
 	const stroke = graph.edges.find((e) => e.genealogy)?.color || "#888888";
 	const width = compact ? 1.5 : 2.5;
+	const fontSize = compact ? 9 : 11;
 
 	function redraw(): void {
 		while (g.firstChild) g.removeChild(g.firstChild);
 		for (const [, group] of groups) {
-			drawGroup(g, cy, group, stroke, width);
+			drawGroup(g, cy, group, stroke, width, fontSize, labelHooks);
 		}
 	}
 
@@ -39,6 +64,8 @@ export function drawFamilyConnectors(
 	syncViewport(cy, g);
 	onPositionChange(cy, redraw);
 	enableSpouseDrag(cy, pairAdj);
+
+	return redraw;
 }
 
 /** Group children by their shared parent-set from genealogy edges.
@@ -108,27 +135,31 @@ function drawGroup(
 	group: FamilyGroup,
 	stroke: string,
 	strokeWidth: number,
+	fontSize: number,
+	labelHooks: OverlayLabelHooks | null,
 ): void {
 	const parentEles = group.parents
 		.map((id) => cy.getElementById(id))
 		.filter((e) => e.length > 0);
-	const childEles = group.children
-		.map((id) => cy.getElementById(id))
-		.filter((e) => e.length > 0);
+	// Keep child id alongside its position+radius so labels can be looked up
+	// per-edge. Discarded position-only mapping made labels impossible.
+	const childData = group.children
+		.map((id) => ({ id, ele: cy.getElementById(id) }))
+		.filter((c) => c.ele.length > 0)
+		.map((c) => ({ id: c.id, pos: c.ele.position(), r: c.ele.width() / 2 }));
 
-	if (parentEles.length === 0 || childEles.length === 0) return;
+	if (parentEles.length === 0 || childData.length === 0) return;
 
 	const parentPos = parentEles.map((e) => e.position());
-	const childPos = childEles.map((e) => e.position());
 	const parentR = Math.max(...parentEles.map((e) => e.width() / 2));
-	const childR = Math.max(...childEles.map((e) => e.width() / 2));
+	const childRMax = Math.max(...childData.map((c) => c.r));
 
 	const midX = parentPos.reduce((s, p) => s + p.x, 0) / parentPos.length;
 	const maxParentY = Math.max(...parentPos.map((p) => p.y));
-	const minChildY = Math.min(...childPos.map((p) => p.y));
+	const minChildY = Math.min(...childData.map((c) => c.pos.y));
 
 	const gapTop = maxParentY + parentR;
-	const gapBot = Math.max(minChildY - childR, gapTop + 20);
+	const gapBot = Math.max(minChildY - childRMax, gapTop + 20);
 	const dropY = gapTop + (gapBot - gapTop) * 0.3;
 
 	// Two-parent: drop from the pair-edge midpoint. Single: from node bottom.
@@ -139,25 +170,64 @@ function drawGroup(
 
 	addPath(g, `M${midX},${dropStartY} V${dropY}`, stroke, strokeWidth);
 
-	if (childPos.length === 1) {
-		const cx = childPos[0].x;
-		const cy_ = childPos[0].y;
-		if (Math.abs(cx - midX) < 2) {
-			addPath(g, `M${midX},${dropY} V${cy_ - childR}`, stroke, strokeWidth);
-		} else {
-			addPath(g, `M${midX},${dropY} H${cx} V${cy_ - childR}`, stroke, strokeWidth);
+	// Render the per-child stem + (if a label exists) a label, plus an
+	// invisible hit zone wide enough to be double-clickable.
+	const renderChildStem = (
+		childId: string,
+		childPos: { x: number; y: number },
+		childR: number,
+		stemPathD: string,
+		stemTopY: number,
+		stemBotY: number,
+	) => {
+		addPath(g, stemPathD, stroke, strokeWidth);
+		if (!labelHooks) return;
+
+		// Position the label at the midpoint of the stem's vertical extent.
+		// stemTopY is where the stem meets the bar/drop; stemBotY is the top
+		// of the child node circle.
+		const labelX = childPos.x;
+		const labelY = stemTopY + (stemBotY - stemTopY) * 0.5;
+
+		const parents = group.parents;
+		const labels = parents.map((p) => labelHooks.getGenealogyLabel(childId, p)).filter((s) => s);
+		if (labels.length > 0) {
+			addTextLabel(g, labels.join(" / "), labelX, labelY, fontSize, (evt) => {
+				const editTarget = parents.find((p) => labelHooks.getGenealogyLabel(childId, p)) ?? parents[0];
+				labelHooks.editGenealogyLabel(childId, editTarget, evt.clientX, evt.clientY);
+			});
 		}
+
+		// Hit zone — invisible thick stroke along the stem so users can
+		// double-click the connector (even when no label exists) to open
+		// the editor. Edits the first parent that has a label, else the
+		// leftmost-listed parent.
+		addHitZone(g, stemPathD, (evt) => {
+			const editTarget = parents.find((p) => labelHooks.getGenealogyLabel(childId, p)) ?? parents[0];
+			labelHooks.editGenealogyLabel(childId, editTarget, evt.clientX, evt.clientY);
+		});
+	};
+
+	if (childData.length === 1) {
+		const c = childData[0];
+		const stemBotY = c.pos.y - c.r;
+		const stemD = Math.abs(c.pos.x - midX) < 2
+			? `M${midX},${dropY} V${stemBotY}`
+			: `M${midX},${dropY} H${c.pos.x} V${stemBotY}`;
+		renderChildStem(c.id, c.pos, c.r, stemD, dropY, stemBotY);
 		return;
 	}
 
-	const sorted = [...childPos].sort((a, b) => a.x - b.x);
-	const barLeft = Math.min(sorted[0].x, midX);
-	const barRight = Math.max(sorted[sorted.length - 1].x, midX);
+	const sortedX = [...childData].map((c) => c.pos.x).sort((a, b) => a - b);
+	const barLeft = Math.min(sortedX[0], midX);
+	const barRight = Math.max(sortedX[sortedX.length - 1], midX);
 
 	addPath(g, `M${barLeft},${dropY} H${barRight}`, stroke, strokeWidth);
 
-	for (const cp of childPos) {
-		addPath(g, `M${cp.x},${dropY} V${cp.y - childR}`, stroke, strokeWidth);
+	for (const c of childData) {
+		const stemBotY = c.pos.y - c.r;
+		const stemD = `M${c.pos.x},${dropY} V${stemBotY}`;
+		renderChildStem(c.id, c.pos, c.r, stemD, dropY, stemBotY);
 	}
 }
 
@@ -244,5 +314,95 @@ function addPath(
 	path.setAttribute("stroke", stroke);
 	path.setAttribute("stroke-width", String(strokeWidth));
 	path.setAttribute("stroke-linecap", "square");
+	parent.appendChild(path);
+}
+
+/**
+ * Render a short text label centred on (x, y). Includes a background pill
+ * behind the text so the connector line doesn't crash through the characters.
+ * The label is double-clickable for editing.
+ *
+ * The parent SVG has pointer-events:none so the canvas underneath stays
+ * interactive — we explicitly opt this group back in.
+ */
+function addTextLabel(
+	parent: SVGGElement,
+	text: string,
+	x: number,
+	y: number,
+	fontSize: number,
+	onDblclick: (evt: MouseEvent) => void,
+): void {
+	const group = document.createElementNS(SVG_NS, "g");
+	group.classList.add("family-connector-label");
+	group.style.cursor = "pointer";
+	group.style.pointerEvents = "auto";
+
+	// SVG has no text-measurement API without a render pass, so we estimate
+	// width from character count. 0.6em per char is a reasonable average for
+	// typical UI fonts, and the pill expands to a sensible minimum so single
+	// digits ("3") don't get a tiny pill.
+	const charW = fontSize * 0.6;
+	const padX = 4;
+	const padY = 2;
+	const w = Math.max(20, text.length * charW + padX * 2);
+	const h = fontSize + padY * 2;
+
+	const bg = document.createElementNS(SVG_NS, "rect");
+	bg.setAttribute("x", String(x - w / 2));
+	bg.setAttribute("y", String(y - h / 2));
+	bg.setAttribute("width", String(w));
+	bg.setAttribute("height", String(h));
+	bg.setAttribute("rx", "3");
+	bg.setAttribute("ry", "3");
+	bg.setAttribute("fill", "var(--background-primary)");
+	bg.setAttribute("fill-opacity", "0.92");
+	bg.setAttribute("stroke", "var(--background-modifier-border)");
+	bg.setAttribute("stroke-width", "1");
+	group.appendChild(bg);
+
+	const t = document.createElementNS(SVG_NS, "text");
+	t.setAttribute("x", String(x));
+	t.setAttribute("y", String(y));
+	t.setAttribute("text-anchor", "middle");
+	t.setAttribute("dominant-baseline", "central");
+	t.setAttribute("font-size", String(fontSize));
+	t.setAttribute("font-weight", "500");
+	t.setAttribute("fill", "var(--text-normal)");
+	t.textContent = text;
+	group.appendChild(t);
+
+	group.addEventListener("dblclick", (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		onDblclick(e as MouseEvent);
+	});
+
+	parent.appendChild(group);
+}
+
+/**
+ * Append an invisible thick-stroke path covering the same shape as a stem,
+ * so users can double-click the connector line (even with no label) to open
+ * the editor. The 14px stroke width gives a clickable target wider than the
+ * visible 2.5px line.
+ */
+function addHitZone(
+	parent: SVGGElement,
+	d: string,
+	onDblclick: (evt: MouseEvent) => void,
+): void {
+	const path = document.createElementNS(SVG_NS, "path");
+	path.setAttribute("d", d);
+	path.setAttribute("fill", "none");
+	path.setAttribute("stroke", "transparent");
+	path.setAttribute("stroke-width", "14");
+	path.style.cursor = "pointer";
+	path.style.pointerEvents = "stroke";  // only the stroke catches clicks, not the empty fill area
+	path.addEventListener("dblclick", (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		onDblclick(e as MouseEvent);
+	});
 	parent.appendChild(path);
 }
