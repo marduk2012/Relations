@@ -166,6 +166,82 @@ export function buildLocalGraph(
 }
 
 /**
+ * Filter a graph to only the connected component containing centerPath.
+ * Pure function — no app/vault access — for testability.
+ *
+ * If centerPath isn't a node in the graph, returns an empty graph.
+ * Otherwise returns the subgraph of all nodes reachable from centerPath
+ * (via any edge, treated as undirected) plus all edges between them.
+ */
+export function connectedComponent(
+	graph: RelationsGraph,
+	centerPath: string,
+): RelationsGraph {
+	if (!graph.nodes.some((n) => n.id === centerPath)) {
+		return { nodes: [], edges: [] };
+	}
+	const adj = new Map<string, Set<string>>();
+	for (const e of graph.edges) {
+		if (!adj.has(e.source)) adj.set(e.source, new Set());
+		if (!adj.has(e.target)) adj.set(e.target, new Set());
+		adj.get(e.source)!.add(e.target);
+		adj.get(e.target)!.add(e.source);
+	}
+	const visited = new Set<string>([centerPath]);
+	const queue: string[] = [centerPath];
+	while (queue.length > 0) {
+		const cur = queue.shift()!;
+		const neighbors = adj.get(cur);
+		if (!neighbors) continue;
+		for (const nb of neighbors) {
+			if (visited.has(nb)) continue;
+			visited.add(nb);
+			queue.push(nb);
+		}
+	}
+	return {
+		nodes: graph.nodes.filter((n) => visited.has(n.id)),
+		edges: graph.edges.filter((e) => visited.has(e.source) && visited.has(e.target)),
+	};
+}
+
+/**
+ * Build a graph containing every note reachable from a focus note via any
+ * relationship edge. Equivalent to the connected component of the full graph
+ * containing centerPath. No depth limit — walks until the queue is exhausted.
+ *
+ * Use case: a user looking at one character wants to see "everyone whose lives
+ * touch theirs, however distantly," without including unrelated family trees
+ * elsewhere in the vault. Different from `full` (which shows every note in
+ * the vault including disconnected islands) and from `local` (which bounds
+ * by hop count).
+ *
+ * Edge types are not filtered — any edge counts as a connection. A long
+ * chain through friends-of-friends or mentor-of-rival will still be followed.
+ * For tightly-bounded vaults this is the right thing; for vaults with lots
+ * of weak side-relationships the connected component may grow large.
+ */
+export function buildConnectedGraph(
+	app: App,
+	settings: RelationsSettings,
+	centerPath: string,
+	cache: GraphCache | null = null,
+): RelationsGraph {
+	const full = buildFullGraph(app, settings, cache);
+	if (!full.nodes.some((n) => n.id === centerPath)) {
+		// Center note isn't part of any relationship — return just the focus note
+		// (if it exists on disk) so the view can render a "no relationships yet" state.
+		const f = app.vault.getAbstractFileByPath(centerPath);
+		if (f instanceof TFile) {
+			const node = buildNode(app, f, settings);
+			return { nodes: node ? [node] : [], edges: [] };
+		}
+		return { nodes: [], edges: [] };
+	}
+	return connectedComponent(full, centerPath);
+}
+
+/**
  * Build a graph containing only the genealogy/partner neighbourhood of a focus
  * note: ancestors (transitively up the parent chain), descendants (transitively
  * down through children of children), and partners of anyone in that set.

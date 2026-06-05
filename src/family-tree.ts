@@ -1,5 +1,6 @@
 import { Core } from "cytoscape";
 import { RelationsGraph } from "./types";
+import { computeEffectiveParents } from "./family-parenting";
 
 /**
  * Generation-aligned positioning for the family-graph view.
@@ -77,16 +78,57 @@ export function applyGenerationLayout(
 	const nodeWidth = NODE_NOMINAL_WIDTH * Math.sqrt(sp);
 	// 1. Build adjacency: for every node, what are its parents (genealogy edges
 	//    with this node as source) and who is it paired with (pair edges).
-	const parentsOf = new Map<string, string[]>();
-	const pairsOf = new Map<string, Set<string>>();
+	//
+	//    We use computeEffectiveParents rather than walking genealogy edges
+	//    directly. This drops the "spouse-having" parent from the layout
+	//    when the child is the product of an affair — see family-parenting.ts
+	//    for the full rule. Children's biological parents (both edges) remain
+	//    in the underlying graph; only the layout planning sees the simplified
+	//    parent set.
+	//
+	//    Generation computation, however, must use ALL declared parents.
+	//    Otherwise an affair child loses the gen-anchoring signal from their
+	//    married parent and ends up too high in the tree (e.g. an affair
+	//    child of Wilhelm, gen 2, being computed at gen 1 from their lover-
+	//    parent Franziska, gen 0). We keep the raw map for generation only.
+	const parentsOf = computeEffectiveParents(graph);
+	const rawParentsOf = new Map<string, string[]>();
 	for (const e of graph.edges) {
-		if (e.genealogy) {
-			// Convention: edge goes child → parent.
-			pushTo(parentsOf, e.source, e.target);
-		}
+		if (!e.genealogy) continue;
+		if (!rawParentsOf.has(e.source)) rawParentsOf.set(e.source, []);
+		rawParentsOf.get(e.source)!.push(e.target);
+	}
+	const pairsOf = new Map<string, Set<string>>();
+	// Soft adjacency: symmetric non-pair relationships (e.g. `geliebter` /
+	// `lover` typed edges). These don't bind partners into the layout-level
+	// pair-bar treatment that spouses get, but they DO provide a positional
+	// hint — a person's lover should sit adjacent to them in the partner row
+	// when no stronger constraint exists. Used by step 9c to pull lover-only
+	// single-parent units next to their bloodline anchor instead of letting
+	// them float as standalone subtrees.
+	//
+	// Stored as a directed map (anchor → ordered list of soft-adjacent partners)
+	// so step 9c can preserve the order partners were declared in the anchor's
+	// frontmatter. The graph edges only tell us A↔B exists, not the original
+	// frontmatter order; rather than try to recover that, we fall back to
+	// edge-insertion order as a stable approximation.
+	const softAdjacencyOf = new Map<string, string[]>();
+	const softAdjacencySeen = new Set<string>();
+	for (const e of graph.edges) {
 		if (e.pair) {
 			addPair(pairsOf, e.source, e.target);
+			continue;
 		}
+		if (!e.symmetric || e.genealogy) continue;
+		const aKey = `${e.source}|${e.target}`;
+		const bKey = `${e.target}|${e.source}`;
+		if (softAdjacencySeen.has(aKey) || softAdjacencySeen.has(bKey)) continue;
+		softAdjacencySeen.add(aKey);
+		softAdjacencySeen.add(bKey);
+		if (!softAdjacencyOf.has(e.source)) softAdjacencyOf.set(e.source, []);
+		if (!softAdjacencyOf.has(e.target)) softAdjacencyOf.set(e.target, []);
+		softAdjacencyOf.get(e.source)!.push(e.target);
+		softAdjacencyOf.get(e.target)!.push(e.source);
 	}
 
 	// 2. Group children by parent-set. The key is the sorted parent ids joined,
@@ -143,12 +185,19 @@ export function applyGenerationLayout(
 	for (const node of graph.nodes) generationOf.set(node.id, 0);
 	// Iterate until stable. Cycle protection via iteration cap (genealogy cycles
 	// are nonsense but a malformed vault could create one).
+	//
+	// Generation uses the RAW parents (both declared parents, before the affair
+	// rule drops one). An affair child's generation should still be one below
+	// the older parent (the spouse-having one) even though their layout sits
+	// only under the lover parent. Without this distinction, e.g. an affair
+	// child of Wilhelm (gen 2) ends up at gen 1 because their other parent
+	// Franziska has gen 0.
 	let changed = true;
 	let iterations = 0;
 	while (changed && iterations < graph.nodes.length + 5) {
 		changed = false;
 		iterations++;
-		for (const [child, parents] of parentsOf) {
+		for (const [child, parents] of rawParentsOf) {
 			const childGen = generationOf.get(child) ?? 0;
 			let maxParentGen = -1;
 			for (const p of parents) {
@@ -329,8 +378,16 @@ export function applyGenerationLayout(
 					subCursor += downstream.subtreeWidth;
 				}
 			} else {
-				// Leaf child — write its position.
-				childPositions.set(c, { x: cx, y: (unit.generation + 1) * genHeight });
+				// Leaf child — write its position. Y uses the child's own
+				// generation (from generationOf, computed from RAW parents),
+				// not unit.generation + 1. For ordinary nuclear-family children
+				// these are the same. They diverge in the affair-child case:
+				// the unit has only the lover-parent (gen N), but the child's
+				// raw generation accounts for the dropped married parent
+				// (typically gen N+something_higher), placing the child on the
+				// correct row beneath the spouse-having parent.
+				const childY = (generationOf.get(c) ?? unit.generation + 1) * genHeight;
+				childPositions.set(c, { x: cx, y: childY });
 			}
 
 			childCursor += cw;
@@ -434,6 +491,129 @@ export function applyGenerationLayout(
 		positionedNodes.add(orphanId);
 		if (!nodesByGenY.has(placedPos.y)) nodesByGenY.set(placedPos.y, []);
 		nodesByGenY.get(placedPos.y)!.push({ id: orphanId, x: chosenX });
+	}
+
+	// 9c. Soft adjacency. After step 9 (canonical positions) and 9b (orphan
+	//      partner placement) have run, some single-parent units may still be
+	//      sitting in their own corner of the canvas — e.g. a `geliebter`
+	//      (lover) who has a child by Wilhelm but isn't paired with him under
+	//      the affair-child rule. Their unit was treated as a root in step 8
+	//      and got placed at the start of the row, far from Wilhelm.
+	//
+	//      Pull such units adjacent to their soft-adjacency anchor. The lover
+	//      moves to a slot to the right of the anchor (right side reserved for
+	//      "side" relationships, matching 9b's informal-partner convention).
+	//      Multiple lovers stack in the order they appear in softAdjacencyOf
+	//      (edge-insertion order, which approximates frontmatter declaration
+	//      order). The unit's child positions in `childPositions` are shifted
+	//      together with the parent so the child stays directly beneath them.
+	//
+	//      Clearance: the first lover unit must clear the anchor's canonical
+	//      subtree (parent + spouse + all children + grandchildren). Each
+	//      subsequent lover must clear the prior lover's subtree. This avoids
+	//      the child column from one family colliding with the previous
+	//      family's bottom-row content.
+	for (const [anchor, partners] of softAdjacencyOf) {
+		if (!positionedNodes.has(anchor)) continue;
+		const anchorPos = cy.getElementById(anchor).position();
+		const anchorY = anchorPos.y;
+		// Right edge of the anchor's own subtree footprint — partner positions,
+		// child positions, etc. Start from anchor's canonical unit's known span.
+		const canonical = canonicalUnitOf.get(anchor);
+		let frontierX = anchorPos.x;
+		if (canonical && positionedUnits.has(canonical)) {
+			frontierX = canonical.x + canonical.subtreeWidth / 2;
+		}
+		// Also account for any nodes on the partner row to the right of the
+		// anchor that aren't part of canonical (e.g. a 9b-placed informal
+		// partner). Without this, a second-spouse placed by 9b at x = anchor +
+		// 1.5×spouseGap could collide with the first lover's parent.
+		const sameRow = nodesByGenY.get(anchorY) ?? [];
+		for (const n of sameRow) {
+			if (n.id === anchor) continue;
+			if (n.x > frontierX) frontierX = n.x;
+		}
+		for (const partner of partners) {
+			// Find a single-parent unit where this partner is the sole parent.
+			// Multi-parent units (e.g. a lover who later married someone else
+			// and had children with them) are anchored by their pair instead.
+			const partnerUnits = (allUnitsByParent.get(partner) ?? []).filter(
+				(u) => u.parents.length === 1 && u.parents[0] === partner,
+			);
+			if (partnerUnits.length === 0) continue;
+			// Only reposition if this unit was actually a root — non-root units
+			// already sit inside someone else's recursion and we shouldn't
+			// disturb that.
+			const unit = partnerUnits[0];
+			if (!roots.includes(unit)) continue;
+			// Place the partner at frontierX + cousinGap + half-subtree-width,
+			// so the partner's own subtree starts past the existing frontier.
+			// The unit.subtreeWidth covers parent + children + grandchildren —
+			// whatever the recursive layout computed in step 7.
+			const subWidth = Math.max(unit.subtreeWidth, nodeWidth);
+			const chosenX = frontierX + cousinGap + subWidth / 2;
+			// Shift the partner and their subtree to the new position.
+			const oldParentPos = cy.getElementById(partner).position();
+			const dx = chosenX - oldParentPos.x;
+			const dy = anchorY - oldParentPos.y;
+			cy.getElementById(partner).position({ x: chosenX, y: anchorY });
+			// Shift everything else in the lover's subtree by the same delta.
+			// This covers two distinct cases:
+			//   (a) Leaf children, whose positions live in `childPositions` and
+			//       haven't been written to Cytoscape yet (step 10 does that).
+			//   (b) Non-leaf descendants (e.g. an affair child who married and
+			//       has their own family unit). Their positions were written
+			//       directly to Cytoscape by step 9 from the downstream unit's
+			//       (x, y), and so need to be updated in-place there.
+			// Walk the subtree breadth-first, collecting every descendant node
+			// reachable from this unit's children.
+			const visited = new Set<string>();
+			const queue: FamilyUnit[] = [unit];
+			while (queue.length > 0) {
+				const u = queue.shift()!;
+				for (const c of u.children) {
+					if (visited.has(c)) continue;
+					visited.add(c);
+					// Update leaf position if present...
+					const cp = childPositions.get(c);
+					if (cp) {
+						childPositions.set(c, { x: cp.x + dx, y: cp.y + dy });
+					}
+					// ...and shift the live Cytoscape position regardless,
+					// since non-leaves were written there by step 9.
+					const node = cy.getElementById(c);
+					if (node && node.length > 0) {
+						const pos = node.position();
+						node.position({ x: pos.x + dx, y: pos.y + dy });
+					}
+					// Recurse into c's own downstream units (their parents +
+					// children all need shifting).
+					const downstream = downstreamUnitsByParent.get(c) ?? [];
+					for (const d of downstream) {
+						queue.push(d);
+						// Also shift d's other parents (e.g. c's spouse) since
+						// step 9 placed them adjacent to c.
+						for (const p of d.parents) {
+							if (p === c) continue;
+							if (visited.has(p)) continue;
+							visited.add(p);
+							const pn = cy.getElementById(p);
+							if (pn && pn.length > 0) {
+								const pp = pn.position();
+								pn.position({ x: pp.x + dx, y: pp.y + dy });
+							}
+						}
+					}
+				}
+			}
+			// Advance the frontier past this unit's right edge for the next
+			// lover (if any).
+			frontierX = chosenX + subWidth / 2;
+			// Record the partner in nodesByGenY so any future 9c iteration
+			// (multi-anchor scenarios) sees the new position.
+			if (!nodesByGenY.has(anchorY)) nodesByGenY.set(anchorY, []);
+			nodesByGenY.get(anchorY)!.push({ id: partner, x: chosenX });
+		}
 	}
 
 	// 10. Write child positions.

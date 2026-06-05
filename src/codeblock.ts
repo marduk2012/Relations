@@ -1,7 +1,7 @@
 import { App, MarkdownPostProcessorContext, MarkdownRenderChild, Notice, parseYaml, setIcon, TFile } from "obsidian";
 import { Core } from "cytoscape";
 import { RelationsSettings, PositionStore, EdgeLabelStore, RelationshipType } from "./types";
-import { buildFullGraph, buildLocalGraph, buildFamilyNeighborhood } from "./graph";
+import { buildFullGraph, buildLocalGraph, buildConnectedGraph, buildFamilyNeighborhood } from "./graph";
 import { renderGraph, synthesizeInformalPartnerships, INFORMAL_PARTNERSHIP_LEGEND } from "./render";
 import type { GraphCache } from "./graph-cache";
 
@@ -11,7 +11,7 @@ interface CodeBlockOptions {
 	size: EmbedSize;
 	depth: number;
 	center?: string;
-	scope?: "local" | "full";
+	scope?: "local" | "full" | "connected";
 	tree?: boolean;
 	familyMode?: "graph" | "tree";  // family view, centered on the host note's family
 	                        // neighbourhood, generation-aligned. "graph": Cytoscape edges
@@ -181,7 +181,12 @@ class RelationsBlockChild extends MarkdownRenderChild {
 		let graph;
 		let highlightId: string | undefined;
 
-		const useFamilyNeighbourhood = this.options.familyMode && this.options.scope !== "full";
+		// Both `full` and `connected` override family-mode's automatic
+		// neighbourhood narrowing — they're explicit user requests for
+		// "give me more than just the bloodline."
+		const useFamilyNeighbourhood = this.options.familyMode
+			&& this.options.scope !== "full"
+			&& this.options.scope !== "connected";
 
 		if (useFamilyNeighbourhood) {
 			if (!hostFile) {
@@ -193,6 +198,13 @@ class RelationsBlockChild extends MarkdownRenderChild {
 			highlightId = hostFile.path;
 		} else if (this.options.scope === "full") {
 			graph = buildFullGraph(this.app, this.settings, this.cache);
+		} else if (this.options.scope === "connected") {
+			if (!hostFile) {
+				canvas.createDiv({ cls: "relations-empty", text: "Could not resolve host note for connected graph." });
+				return;
+			}
+			graph = buildConnectedGraph(this.app, this.settings, hostFile.path, this.cache);
+			highlightId = hostFile.path;
 		} else {
 			if (!hostFile) {
 				canvas.createDiv({ cls: "relations-empty", text: "Could not resolve host note for local graph." });
@@ -207,7 +219,9 @@ class RelationsBlockChild extends MarkdownRenderChild {
 				cls: "relations-empty",
 				text: this.options.scope === "full"
 					? "No connected notes found in vault."
-					: "No relationships within the chosen depth.",
+					: this.options.scope === "connected"
+						? "This note has no relationships."
+						: "No relationships within the chosen depth.",
 			});
 			return;
 		}
@@ -360,7 +374,11 @@ function parseOptions(source: string): ParsedOptions {
 		depthExplicit ? rawDepth : (size === "large" ? 3 : 1),
 	)));
 
-	const scope = parsed["scope"] === "full" ? "full" : "local";
+	const scopeRaw = parsed["scope"];
+	const scope: "local" | "full" | "connected" =
+		scopeRaw === "full" ? "full" :
+		scopeRaw === "connected" ? "connected" :
+		"local";
 	const tree = parsed["tree"] === true;
 	const familyMode = resolveFamilyMode(parsed);
 	const center = typeof parsed["center"] === "string" ? (parsed["center"] as string) : undefined;

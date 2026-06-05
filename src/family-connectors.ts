@@ -1,5 +1,6 @@
 import { Core } from "cytoscape";
 import { RelationsGraph } from "./types";
+import { computeEffectiveParents } from "./family-parenting";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -70,14 +71,14 @@ export function drawFamilyConnectors(
 
 /** Group children by their shared parent-set from genealogy edges.
  *  Expects the ORIGINAL graph (child→parent: e.source=child, e.target=parent).
- *  render.ts inverts edges for Cytoscape display — this must see them pre-inversion. */
+ *  render.ts inverts edges for Cytoscape display — this must see them pre-inversion.
+ *
+ *  Uses computeEffectiveParents to handle the affair-child case: when a child's
+ *  two parents include one with a different spouse, the spouse-having parent is
+ *  dropped from the layout's parent set so the child renders as the lover's
+ *  single-parent child. See family-parenting.ts for the full rule. */
 function buildFamilyGroups(graph: RelationsGraph): Map<string, FamilyGroup> {
-	const parentsOf = new Map<string, string[]>();
-	for (const e of graph.edges) {
-		if (!e.genealogy) continue;
-		if (!parentsOf.has(e.source)) parentsOf.set(e.source, []);
-		parentsOf.get(e.source)!.push(e.target);
-	}
+	const parentsOf = computeEffectiveParents(graph);
 
 	const groups = new Map<string, FamilyGroup>();
 	for (const [child, parents] of parentsOf) {
