@@ -5,6 +5,7 @@ import dagre from "cytoscape-dagre";
 import { RelationsGraph, RelationsSettings, GraphEdge, RelationshipType, EdgeLabelStore, edgeLabelKey } from "./types";
 import { applyGenerationLayout } from "./family-tree";
 import { drawFamilyConnectors, OverlayLabelHooks } from "./family-connectors";
+import { setupNodeBadges } from "./node-badges";
 
 type Stylesheet = cytoscape.StylesheetStyle;
 
@@ -357,6 +358,16 @@ export function renderGraph(opts: RenderOptions): Core {
 		overlayRedraw = drawFamilyConnectors(cy, graph, container, !!compact, overlayHooks);
 	}
 
+	// Node badges: DOM overlay drawing top-left icons, top-right icons, and
+	// italic subtext under each node, driven by frontmatter. Runs in every
+	// mode (basic graph, family-graph, family-tree). Respects the showLabels
+	// flag — when labels are off, badges are off too, so "minimal portraits"
+	// mode stays minimal. The returned redraw function is unused at the
+	// moment because the overlay listens to its own Cytoscape events; if
+	// future code needs to force a redraw (e.g. settings change without
+	// node moves) it would call the returned function.
+	setupNodeBadges(cy, container, showLabels);
+
 	// Apply per-node image styles after init. We do this here (not in the stylesheet
 	// via `data(image)`) because nodes without a resolvable image must NOT have a
 	// background-image at all — otherwise Cytoscape attempts to parse an empty URL
@@ -594,15 +605,29 @@ function toCytoscape(
 ): ElementDefinition[] {
 	const out: ElementDefinition[] = [];
 	for (const n of graph.nodes) {
-		out.push({
-			data: {
-				id: n.id,
-				label: n.label,
-				image: n.image ?? "",
-				hasImage: n.image ? "true" : "false",
-				highlight: highlightId && n.id === highlightId ? "true" : "false",
-			},
-		});
+		const data: Record<string, unknown> = {
+			id: n.id,
+			label: n.label,
+			image: n.image ?? "",
+			hasImage: n.image ? "true" : "false",
+			highlight: highlightId && n.id === highlightId ? "true" : "false",
+		};
+		// ringColor is set ONLY when a rule matched, so the selector
+		// `node[ringColor]` (presence test) correctly distinguishes styled
+		// nodes from default-ring nodes. We don't fall back to an empty
+		// string here because Cytoscape's selectors can't reliably compare
+		// against empty strings (see issue #1735) — using presence instead
+		// avoids that whole class of bug.
+		if (n.ringColor) data.ringColor = n.ringColor;
+		// Badge content used by the node-badges DOM overlay. Stored on the
+		// Cytoscape node data so the overlay can look up content via
+		// `node.data('topLeftIcon')` without maintaining a parallel lookup map.
+		// Nothing in the stylesheet reads these — they're consumed entirely
+		// by the overlay layer.
+		if (n.topLeftIcon) data.topLeftIcon = n.topLeftIcon;
+		if (n.topRightIcon) data.topRightIcon = n.topRightIcon;
+		if (n.subtext) data.subtext = n.subtext;
+		out.push({ data });
 	}
 	for (const e of graph.edges) {
 		const classes: string[] = [];
@@ -680,6 +705,32 @@ function buildStyle(theme: ThemeColors, compact: boolean, showLabels: boolean): 
 				"shape": "ellipse",
 			},
 		},
+		// Per-note ring color override. Driven by frontmatter through the
+		// ringColorProperty + ringColorRules settings. The presence selector
+		// `node[ringColor]` matches nodes whose data has a truthy ringColor —
+		// we only set the field when a rule matched, so this cleanly excludes
+		// unconfigured nodes.
+		//
+		// Selector ordering for the ring-color / highlight / selected
+		// interactions is deliberate:
+		//   1. base node — default thin grey border
+		//   2. node[ringColor] — coloured ring for nodes with a rule match
+		//   3. node[highlight = 'true'] — focus highlight (no rule match)
+		//      uses the theme accent color and the larger size
+		//   4. node:selected — interactive selection color
+		//   5. node[ringColor][highlight = 'true'] — focus + ring color:
+		//      ring color wins (decorative color is what the user configured),
+		//      but the focus's larger size still applies
+		//   6. node[ringColor]:selected — selection + ring color: same idea
+		// This makes the ring colour the most-specific rule when it matters,
+		// so it isn't silently lost on the very note the user is reading.
+		{
+			selector: "node[ringColor]",
+			style: {
+				"border-color": "data(ringColor)",
+				"border-width": 6,
+			},
+		},
 		{
 			selector: "node[highlight = 'true']",
 			style: {
@@ -694,6 +745,25 @@ function buildStyle(theme: ThemeColors, compact: boolean, showLabels: boolean): 
 			style: {
 				"border-width": 3,
 				"border-color": theme.textAccent,
+			},
+		},
+		{
+			selector: "node[ringColor][highlight = 'true']",
+			style: {
+				// Ring color wins on the focus node so the user can still see
+				// the value they configured. Keep the focus-larger size so
+				// "this is the active note" remains visible from layout alone.
+				"border-color": "data(ringColor)",
+				"border-width": 6,
+				"width": nodeSizeFocus,
+				"height": nodeSizeFocus,
+			},
+		},
+		{
+			selector: "node[ringColor]:selected",
+			style: {
+				"border-color": "data(ringColor)",
+				"border-width": 6,
 			},
 		},
 		{

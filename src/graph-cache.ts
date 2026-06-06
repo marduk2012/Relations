@@ -69,5 +69,20 @@ function hashSettings(s: RelationsSettings): string {
 		image: s.imageProperty,
 		folders: s.folderScopes,
 		tags: s.requiredTags,
+		// Ring color settings DO affect node content (each node's ringColor field is
+		// baked at build time), so changes to the property name or rules must
+		// invalidate the cache. The color values themselves matter here unlike
+		// relationshipTypes.color: there's no separate stylesheet path that reads
+		// the rules at render time, so a color edit needs a rebuild.
+		ringProp: s.ringColorProperty,
+		ringRules: s.ringColorRules,
+		// Badge property names directly affect each node's content (badge
+		// strings are baked into nodes during buildNode), so changes here
+		// must invalidate. The badge content per-node isn't in the hash
+		// because it derives from frontmatter — file-change events already
+		// invalidate the cache when frontmatter changes.
+		tlIcon: s.topLeftIconProperty,
+		trIcon: s.topRightIconProperty,
+		subtext: s.subtextProperty,
 	});
 }

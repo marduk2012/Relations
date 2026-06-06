@@ -12,6 +12,16 @@ export interface RelationshipType {
 
 export type GraphMode = "full" | "local";
 
+/**
+ * One rule in the ring-color mapping: when a node's value of the configured
+ * frontmatter property equals `value` (string-compared, trimmed, case-sensitive),
+ * the node's outer ring renders in `color`. No match means no ring color.
+ */
+export interface RingColorRule {
+	value: string;   // exact-match against frontmatter value (case-sensitive)
+	color: string;   // hex color string, e.g. "#ef4444"
+}
+
 export interface RelationsSettings {
 	relationshipTypes: RelationshipType[];
 
@@ -38,6 +48,28 @@ export interface RelationsSettings {
 	// snap straight to their final positions — useful on slower hardware, or for users
 	// who find the settle-in animation distracting.
 	animateLayout: boolean;
+
+	// Ring color: a property-driven outer ring around each node, configured via
+	// a single frontmatter property name plus a list of value→color rules. Empty
+	// property name = feature disabled. Rules are exact-match; an unmatched value
+	// produces no ring (uses the default border color from the stylesheet).
+	//
+	// Example use: ringColorProperty = "feelings", rules = [{value: "enemy", color: "#dc2626"},
+	// {value: "friendly", color: "#22c55e"}]. A note with `feelings: enemy` in its
+	// frontmatter then renders with a red ring.
+	ringColorProperty: string;
+	ringColorRules: RingColorRule[];
+
+	// Node badges: small DOM overlays pinned to each node's corners and beneath
+	// the node, content driven by frontmatter properties. Each is a single
+	// property name; the rendered content is whatever the user puts in that
+	// property — emoji, abbreviation, short text — passed through unchanged.
+	// Empty property name = that slot is disabled. Badges respect the global
+	// label-visibility toggle (showNodeLabels): turn labels off and badges
+	// also disappear, so "minimal portraits" mode stays minimal.
+	topLeftIconProperty: string;
+	topRightIconProperty: string;
+	subtextProperty: string;
 }
 
 export const DEFAULT_SETTINGS: RelationsSettings = {
@@ -72,6 +104,11 @@ export const DEFAULT_SETTINGS: RelationsSettings = {
 	showNodeLabels: true,
 	localGraphDepth: 2,
 	animateLayout: true,
+	ringColorProperty: "",
+	ringColorRules: [],
+	topLeftIconProperty: "",
+	topRightIconProperty: "",
+	subtextProperty: "",
 };
 
 // Internal model
@@ -80,6 +117,20 @@ export interface GraphNode {
 	label: string;         // basename
 	tags: string[];
 	image: string | null;  // resolved resource URL or null
+	// Optional outer-ring color for the node. Driven by frontmatter via the
+	// settings.ringColorProperty + settings.ringColorRules mapping. Undefined
+	// means "no ring color rule applied" — the node uses the default border
+	// color from the stylesheet.
+	ringColor?: string;
+	// Optional badge content rendered by the node-badges DOM overlay (see
+	// node-badges.ts). Each is the raw string from frontmatter — emoji,
+	// abbreviation, single character, whatever the user wants. The overlay
+	// pins these to the corners and beneath the node respectively. Undefined
+	// values produce no DOM (the overlay simply skips nodes with nothing to
+	// draw, keeping the DOM minimal even on large vaults).
+	topLeftIcon?: string;
+	topRightIcon?: string;
+	subtext?: string;
 }
 
 export interface GraphEdge {

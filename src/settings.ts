@@ -9,6 +9,36 @@ export class RelationsSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
+	/**
+	 * Rebuild the settings panel while preserving the user's scroll position.
+	 *
+	 * Default `display()` calls `containerEl.empty()` and re-creates every
+	 * setting from scratch. Browsers reset scrollTop to 0 when the contents
+	 * of a scrollable element are wiped, which jumps the user back to the
+	 * top every time they click "add ring color rule" or remove a row. This
+	 * wrapper captures the current scroll position from whichever ancestor
+	 * is actually scrolling, runs display(), then restores it.
+	 *
+	 * Use this instead of `this.display()` after any in-place mutation that
+	 * needs to redraw the panel (adds, removes, anything that changes the
+	 * row list). The initial display() call (when the settings tab first
+	 * opens) doesn't need this — there's nothing to restore.
+	 */
+	private redisplay(): void {
+		const scrollContainer = findScrollContainer(this.containerEl);
+		const savedScroll = scrollContainer ? scrollContainer.scrollTop : 0;
+		this.display();
+		if (scrollContainer) {
+			// Restore on the next frame — display() completes synchronously but
+			// the browser may not have laid out the new DOM yet, so writing
+			// scrollTop immediately can be clamped. requestAnimationFrame ensures
+			// the new content is measurable before we set the scroll position.
+			requestAnimationFrame(() => {
+				scrollContainer.scrollTop = savedScroll;
+			});
+		}
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
@@ -143,7 +173,111 @@ export class RelationsSettingTab extends PluginSettingTab {
 						genealogy: false,
 					});
 					await this.plugin.saveSettings();
-					this.display();
+					this.redisplay();
+					this.plugin.refreshGraphView();
+				}));
+
+		// -----------------------------------------------------------------
+		// Ring Color section: property name + value→color rules. Drives the
+		// outer ring on each node based on a single frontmatter property.
+		// Whole section is optional: leave the property name blank to disable.
+		// -----------------------------------------------------------------
+		containerEl.createEl("h3", { text: "Ring color" });
+		const ringHelp = containerEl.createDiv({ cls: "setting-item-description" });
+		ringHelp.innerHTML = `
+			<p>Color the outer ring of a node based on a frontmatter property. Set a property name,
+			then map specific values to colors. Notes whose value doesn't match any rule render
+			with the default ring.</p>
+			<p>Example: property <code>feelings</code>, rule <code>enemy → red</code>. A note with
+			<code>feelings: enemy</code> in its frontmatter renders with a red ring.</p>
+		`;
+
+		new Setting(containerEl)
+			.setName("Property name")
+			.setDesc("Frontmatter property the rules below match against. Leave blank to disable ring color.")
+			.addText((t) => t
+				.setPlaceholder("e.g. feelings")
+				.setValue(this.plugin.settings.ringColorProperty)
+				.onChange(async (v) => {
+					this.plugin.settings.ringColorProperty = v.trim();
+					await this.plugin.saveSettings();
+					this.plugin.graphCache.invalidate();
+					this.plugin.refreshGraphView();
+				}));
+
+		const ringList = containerEl.createDiv();
+		this.renderRingColorList(ringList);
+
+		new Setting(containerEl)
+			.addButton((b: ButtonComponent) => b
+				.setButtonText("Add ring color rule")
+				.setCta()
+				.onClick(async () => {
+					this.plugin.settings.ringColorRules.push({
+						value: "",
+						color: "#ef4444",
+					});
+					await this.plugin.saveSettings();
+					this.plugin.graphCache.invalidate();
+					this.redisplay();
+					this.plugin.refreshGraphView();
+				}));
+
+		// -----------------------------------------------------------------
+		// Node Badges section: three independent frontmatter properties whose
+		// values render as corner icons + italic subtext on each node. No
+		// rules layer — whatever the user puts in the property is what shows
+		// up (typically an emoji for the icon slots, short text for subtext).
+		// Each slot is independently optional: leave a property name blank
+		// to disable that slot.
+		// -----------------------------------------------------------------
+		containerEl.createEl("h3", { text: "Node badges" });
+		const badgeHelp = containerEl.createDiv({ cls: "setting-item-description" });
+		badgeHelp.innerHTML = `
+			<p>Show small badges around each node, driven by frontmatter properties. Each slot
+			displays the value of the named property as-is — an emoji, an abbreviation, a short
+			label, whatever the user types.</p>
+			<p>Notes without the configured property render no badge for that slot. Leave a
+			property name blank to disable the slot entirely. Badges respect the global
+			<em>Show node labels</em> setting — turn labels off and badges turn off with them.</p>
+		`;
+
+		new Setting(containerEl)
+			.setName("Top-left icon property")
+			.setDesc("Frontmatter property whose value renders as a badge in the top-left corner. Leave blank to disable.")
+			.addText((t) => t
+				.setPlaceholder("e.g. weapon")
+				.setValue(this.plugin.settings.topLeftIconProperty)
+				.onChange(async (v) => {
+					this.plugin.settings.topLeftIconProperty = v.trim();
+					await this.plugin.saveSettings();
+					this.plugin.graphCache.invalidate();
+					this.plugin.refreshGraphView();
+				}));
+
+		new Setting(containerEl)
+			.setName("Top-right icon property")
+			.setDesc("Frontmatter property whose value renders as a badge in the top-right corner. Leave blank to disable.")
+			.addText((t) => t
+				.setPlaceholder("e.g. faction")
+				.setValue(this.plugin.settings.topRightIconProperty)
+				.onChange(async (v) => {
+					this.plugin.settings.topRightIconProperty = v.trim();
+					await this.plugin.saveSettings();
+					this.plugin.graphCache.invalidate();
+					this.plugin.refreshGraphView();
+				}));
+
+		new Setting(containerEl)
+			.setName("Subtext property")
+			.setDesc("Frontmatter property whose value renders as italic subtext below the node. Leave blank to disable.")
+			.addText((t) => t
+				.setPlaceholder("e.g. title")
+				.setValue(this.plugin.settings.subtextProperty)
+				.onChange(async (v) => {
+					this.plugin.settings.subtextProperty = v.trim();
+					await this.plugin.saveSettings();
+					this.plugin.graphCache.invalidate();
 					this.plugin.refreshGraphView();
 				}));
 
@@ -239,9 +373,90 @@ export class RelationsSettingTab extends PluginSettingTab {
 			removeBtn.addEventListener("click", async () => {
 				this.plugin.settings.relationshipTypes.splice(idx, 1);
 				await this.plugin.saveSettings();
-				this.display();
+				this.redisplay();
 				this.plugin.refreshGraphView();
 			});
 		});
 	}
+
+	/**
+	 * Render the ring-color rules as a small table of (value, color, remove)
+	 * rows. Mirrors renderTypeList in structure and reuses its row styling, so
+	 * the visual feel is consistent across the settings page. Editing any cell
+	 * busts the graph cache (ring color is baked into nodes at build time) and
+	 * triggers a re-render.
+	 */
+	private renderRingColorList(container: HTMLElement): void {
+		container.empty();
+
+		if (this.plugin.settings.ringColorRules.length === 0) {
+			const empty = container.createDiv({ cls: "setting-item-description" });
+			empty.setText("No rules yet. Click \"Add ring color rule\" below to create one.");
+			return;
+		}
+
+		const header = container.createDiv({ cls: "relations-types-header" });
+		header.createSpan({ text: "Value", cls: "relations-types-header-cell relations-types-header-name" });
+		header.createSpan({ text: "Color", cls: "relations-types-header-cell" });
+		header.createSpan({ text: "", cls: "relations-types-header-cell" });
+
+		this.plugin.settings.ringColorRules.forEach((rule, idx) => {
+			const row = container.createDiv({ cls: "relations-types-row" });
+
+			const valueInput = row.createEl("input", { type: "text", cls: "relations-types-name" });
+			valueInput.value = rule.value;
+			valueInput.placeholder = "e.g. enemy";
+			valueInput.addEventListener("change", async () => {
+				this.plugin.settings.ringColorRules[idx].value = valueInput.value;
+				await this.plugin.saveSettings();
+				this.plugin.graphCache.invalidate();
+				this.plugin.refreshGraphView();
+			});
+
+			const colorInput = row.createEl("input", { type: "color", cls: "relations-types-color" });
+			colorInput.value = rule.color;
+			colorInput.addEventListener("change", async () => {
+				this.plugin.settings.ringColorRules[idx].color = colorInput.value;
+				await this.plugin.saveSettings();
+				this.plugin.graphCache.invalidate();
+				this.plugin.refreshGraphView();
+			});
+
+			const removeBtn = row.createEl("button", { text: "✕", cls: "relations-types-remove" });
+			removeBtn.title = "Remove rule";
+			removeBtn.addEventListener("click", async () => {
+				this.plugin.settings.ringColorRules.splice(idx, 1);
+				await this.plugin.saveSettings();
+				this.plugin.graphCache.invalidate();
+				this.redisplay();
+				this.plugin.refreshGraphView();
+			});
+		});
+	}
+}
+
+/**
+ * Walk up from `start` and return the first ancestor element that has overflow
+ * scrolling — the element whose scrollTop we'd need to preserve across a
+ * settings rebuild. Returns null if no scrollable ancestor exists (in which
+ * case there's no scroll to preserve and the caller can skip the dance).
+ *
+ * We can't just save containerEl.scrollTop, because `containerEl` isn't
+ * usually the element that actually scrolls in Obsidian's settings modal —
+ * a parent does. Sniffing by computed style (`overflow-y` ∈ {auto, scroll}
+ * AND scrollHeight > clientHeight) finds it reliably across modal and
+ * inline-tab layouts.
+ */
+function findScrollContainer(start: HTMLElement): HTMLElement | null {
+	let el: HTMLElement | null = start;
+	while (el && el !== document.body) {
+		const style = window.getComputedStyle(el);
+		const overflowY = style.overflowY;
+		const scrolls = overflowY === "auto" || overflowY === "scroll";
+		if (scrolls && el.scrollHeight > el.clientHeight) {
+			return el;
+		}
+		el = el.parentElement;
+	}
+	return null;
 }

@@ -375,12 +375,85 @@ function buildNode(
 	const cache = app.metadataCache.getFileCache(file);
 	const tags = cache ? (getAllTags(cache) ?? []) : [];
 	const image = resolveImage(app, file, settings, cache);
-	return {
+	const fm = cache?.frontmatter;
+	const ringColor = resolveRingColor(settings, fm);
+	const topLeftIcon = resolveFrontmatterString(fm, settings.topLeftIconProperty);
+	const topRightIcon = resolveFrontmatterString(fm, settings.topRightIconProperty);
+	const subtext = resolveFrontmatterString(fm, settings.subtextProperty);
+	const node: GraphNode = {
 		id: file.path,
 		label: file.basename,
 		tags,
 		image,
 	};
+	if (ringColor) node.ringColor = ringColor;
+	if (topLeftIcon) node.topLeftIcon = topLeftIcon;
+	if (topRightIcon) node.topRightIcon = topRightIcon;
+	if (subtext) node.subtext = subtext;
+	return node;
+}
+
+/**
+ * Generic frontmatter-string resolver used by the node-badge features
+ * (top-left icon, top-right icon, subtext). Returns the trimmed string value
+ * of the property, or undefined if any of: property name is blank, property
+ * isn't set, the value is array-or-scalar coerces to empty.
+ *
+ * Coercion matches resolveRingColor for consistency: arrays take their first
+ * element; non-string scalars (numbers, booleans) are stringified; whitespace
+ * is trimmed. The badge layer renders the result as text — emoji, abbreviation,
+ * short title, whatever the user typed.
+ */
+export function resolveFrontmatterString(
+	frontmatter: Record<string, unknown> | undefined,
+	propertyName: string,
+): string | undefined {
+	const prop = propertyName?.trim();
+	if (!prop) return undefined;
+	if (!frontmatter) return undefined;
+	const raw = frontmatter[prop];
+	if (raw == null) return undefined;
+	const first = Array.isArray(raw) ? raw[0] : raw;
+	if (first == null) return undefined;
+	const value = String(first).trim();
+	if (!value) return undefined;
+	return value;
+}
+
+/**
+ * Resolve the ring color for a node based on settings.ringColorProperty and
+ * settings.ringColorRules. Returns the matched color, or undefined if no rule
+ * applies (feature disabled, property missing, value doesn't match any rule).
+ *
+ * Frontmatter values come in as strings, arrays, numbers, or booleans — we
+ * coerce to a single string and trim before comparing. Array-valued properties
+ * use the first element (multi-value matching would need a different settings
+ * shape to express). Comparison is case-sensitive on purpose: users typing
+ * `Enemy` vs `enemy` may genuinely intend different categories, and we shouldn't
+ * silently collapse them. Users who want case-insensitive matching can lowercase
+ * their rule values.
+ */
+export function resolveRingColor(
+	settings: RelationsSettings,
+	frontmatter: Record<string, unknown> | undefined,
+): string | undefined {
+	const prop = settings.ringColorProperty?.trim();
+	if (!prop) return undefined;
+	if (!settings.ringColorRules || settings.ringColorRules.length === 0) return undefined;
+	if (!frontmatter) return undefined;
+	const raw = frontmatter[prop];
+	if (raw == null) return undefined;
+	const first = Array.isArray(raw) ? raw[0] : raw;
+	if (first == null) return undefined;
+	const value = String(first).trim();
+	if (!value) return undefined;
+	for (const rule of settings.ringColorRules) {
+		if (rule.value.trim() === value) {
+			const c = rule.color?.trim();
+			if (c) return c;
+		}
+	}
+	return undefined;
 }
 
 /**
