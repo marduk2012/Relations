@@ -45,11 +45,11 @@ export function setupNodeBadges(
 	// Find or create the overlay container. The host element is the same
 	// container Cytoscape renders into — we lay our own absolute-positioned
 	// div over it so badges sit on top of the canvas.
-	let overlay = container.querySelector(
+	let overlay = container.querySelector<HTMLDivElement>(
 		":scope > .relations-node-badges",
-	) as HTMLDivElement | null;
+	);
 	if (!overlay) {
-		overlay = document.createElement("div");
+		overlay = activeDocument.createElement("div");
 		overlay.className = "relations-node-badges";
 		// Layout, positioning, z-index, pointer-events, overflow all live in
 		// styles.css under .relations-node-badges.
@@ -66,7 +66,7 @@ export function setupNodeBadges(
 	}
 
 	if (!enabled) {
-		overlay.innerHTML = "";
+		overlay.empty();
 		return () => {
 			/* disabled mode — no-op redraw */
 		};
@@ -79,7 +79,7 @@ export function setupNodeBadges(
 	function ensureGroup(nodeId: string): BadgeGroup {
 		const existing = groups.get(nodeId);
 		if (existing) return existing;
-		const el = document.createElement("div");
+		const el = activeDocument.createElement("div");
 		el.className = "relations-node-badge-group";
 		// Group's position/pointer-events/initial left+top live in styles.css
 		// under .relations-node-badge-group. Per-frame left/top are set
@@ -156,7 +156,7 @@ export function setupNodeBadges(
 	function scheduleRedraw() {
 		if (rafScheduled) return;
 		rafScheduled = true;
-		requestAnimationFrame(() => {
+		window.requestAnimationFrame(() => {
 			rafScheduled = false;
 			redraw();
 		});
@@ -185,7 +185,7 @@ interface BadgeGroup {
 }
 
 function makeBadgeSpan(corner: "top-left" | "top-right"): HTMLSpanElement {
-	const el = document.createElement("span");
+	const el = activeDocument.createElement("span");
 	el.className = `relations-node-badge relations-node-badge-${corner}`;
 	// All static styling (position, padding, border, font, colors,
 	// transform-origin per corner) lives in styles.css under
@@ -195,7 +195,7 @@ function makeBadgeSpan(corner: "top-left" | "top-right"): HTMLSpanElement {
 }
 
 function makeSubtextSpan(): HTMLSpanElement {
-	const el = document.createElement("span");
+	const el = activeDocument.createElement("span");
 	el.className = "relations-node-badge relations-node-subtext";
 	// Static styling lives in styles.css under .relations-node-subtext.
 	// Per-frame left/top/transform are set in positionGroup() via template-

@@ -71,7 +71,7 @@ interface ThemeColors {
  * `rgb(r, g, b)` or `rgba(r, g, b, a)` — both of which Cytoscape accepts.
  */
 function readColor(host: HTMLElement, varName: string, fallback: string): string {
-	const probe = document.createElement("div");
+	const probe = activeDocument.createElement("div");
 	probe.className = "relations-color-probe";
 	probe.style.color = `var(${varName}, ${fallback})`;
 	host.appendChild(probe);
@@ -419,7 +419,7 @@ export function renderGraph(opts: RenderOptions): Core {
 		ro.observe(container);
 		// Also watch the body — sibling changes that push our container around
 		// don't trigger our own ResizeObserver.
-		ro.observe(document.body);
+		ro.observe(activeDocument.body);
 		cy.on("destroy", () => ro.disconnect());
 	}
 
@@ -445,16 +445,18 @@ export function renderGraph(opts: RenderOptions): Core {
 	container.addEventListener("mouseenter", onMouseEnter);
 	cy.on("destroy", () => container.removeEventListener("mouseenter", onMouseEnter));
 
-	cy.on("tap", "node", async (evt) => {
-		const path = evt.target.id() as string;
-		const file = app.vault.getAbstractFileByPath(path);
-		if (file instanceof TFile) {
-			await app.workspace.getLeaf(false).openFile(file);
-		}
+	cy.on("tap", "node", (evt) => {
+		void (async () => {
+			const path = evt.target.id();
+			const file = app.vault.getAbstractFileByPath(path);
+			if (file instanceof TFile) {
+				await app.workspace.getLeaf(false).openFile(file);
+			}
+		})();
 	});
 
 	cy.on("cxttap", "node", (evt) => {
-		const path = evt.target.id() as string;
+		const path = evt.target.id();
 		const file = app.vault.getAbstractFileByPath(path);
 		if (!(file instanceof TFile)) return;
 		const orig = evt.originalEvent as MouseEvent;
@@ -532,7 +534,7 @@ function openEdgeLabelEditor(opts: {
 	opts.container.querySelectorAll(".relations-edge-label-editor").forEach((el) => el.remove());
 
 	const containerRect = opts.container.getBoundingClientRect();
-	const input = document.createElement("input");
+	const input = activeDocument.createElement("input");
 	input.type = "text";
 	input.className = "relations-edge-label-editor";
 	input.value = opts.current;
@@ -586,7 +588,7 @@ function openEdgeLabelEditor(opts: {
  */
 function findScrollParent(el: HTMLElement): HTMLElement | Window {
 	let cur: HTMLElement | null = el.parentElement;
-	while (cur && cur !== document.body) {
+	while (cur && cur !== activeDocument.body) {
 		const overflow = getComputedStyle(cur).overflowY;
 		if (overflow === "auto" || overflow === "scroll" || overflow === "overlay") {
 			return cur;

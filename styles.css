@@ -544,3 +544,9 @@
 	white-space: nowrap;
 	transform-origin: 50% 0%;
 }
+
+/* Bullet list inside a settings help block, slight top margin so it
+ * doesn't crowd the preceding paragraph. */
+.relations-help-list {
+	margin-top: 4px;
+}

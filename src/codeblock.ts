@@ -127,26 +127,30 @@ class RelationsBlockChild extends MarkdownRenderChild {
 			return { autoAddedId };
 		};
 
-		lockBtn.addEventListener("click", async () => {
-			const wasLocked = this.locked;
-			const result = await savePositions();
-			if (result) {
-				this.locked = true;
-				updateUI();
-				if (result.autoAddedId) {
-					new Notice("Layout locked. Added an id to the code block so it persists across refreshes.");
-				} else {
-					new Notice(wasLocked ? "Layout updated." : "Layout locked. Positions will persist across refreshes.");
+		lockBtn.addEventListener("click", () => {
+			void (async () => {
+				const wasLocked = this.locked;
+				const result = await savePositions();
+				if (result) {
+					this.locked = true;
+					updateUI();
+					if (result.autoAddedId) {
+						new Notice("Layout locked. Added an id to the code block so it persists across refreshes.");
+					} else {
+						new Notice(wasLocked ? "Layout updated." : "Layout locked. Positions will persist across refreshes.");
+					}
 				}
-			}
+			})();
 		});
 
-		resetBtn.addEventListener("click", async () => {
-			if (!this.store || !this.options.id) return;
-			await this.store.clear(this.options.id);
-			this.locked = false;
-			this.render();
-			new Notice("Layout reset — back to automatic layout.");
+		resetBtn.addEventListener("click", () => {
+			void (async () => {
+				if (!this.store || !this.options.id) return;
+				await this.store.clear(this.options.id);
+				this.locked = false;
+				this.render();
+				new Notice("Layout reset — back to automatic layout.");
+			})();
 		});
 	}
 
@@ -381,11 +385,11 @@ function parseOptions(source: string): ParsedOptions {
 		"local";
 	const tree = parsed["tree"] === true;
 	const familyMode = resolveFamilyMode(parsed);
-	const center = typeof parsed["center"] === "string" ? (parsed["center"] as string) : undefined;
+	const center = typeof parsed["center"] === "string" ? parsed["center"] : undefined;
 
 	// labels: explicit true/false hides or shows note names for this block,
 	// overriding the global setting. Undefined = inherit the setting.
-	const labels = typeof parsed["labels"] === "boolean" ? (parsed["labels"] as boolean) : undefined;
+	const labels = typeof parsed["labels"] === "boolean" ? parsed["labels"] : undefined;
 
 	// Zoom: accept a number (1.4) or a string ending in "%" ("140%"). Out-of-range
 	// values are clamped to a sensible window — going past 5x mostly hurts.

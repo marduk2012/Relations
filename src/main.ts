@@ -30,26 +30,26 @@ export default class RelationsPlugin extends Plugin implements PositionStore, Ed
 		);
 
 		this.addRibbonIcon("users", "Open Relations graph", () => {
-			this.activateView();
+			void this.activateView();
 		});
 
 		this.addCommand({
-			id: "open-relations-graph",
-			name: "Open Relations graph",
+			id: "open-graph",
+			name: "Open graph",
 			callback: () => this.activateView(),
 		});
 
 		this.addCommand({
-			id: "refresh-relations-graph",
-			name: "Refresh Relations graph",
+			id: "refresh-graph",
+			name: "Refresh graph",
 			callback: () => this.refreshGraphView(),
 		});
 
 		// Insert a bare relations block at the cursor. Empty body — the host note's
 		// frontmatter and plugin defaults supply everything needed for a useful render.
 		this.addCommand({
-			id: "insert-relations-block",
-			name: "Insert relations code block",
+			id: "insert-block",
+			name: "Insert code block",
 			editorCallback: (editor: Editor, _view: MarkdownView) => {
 				insertCodeBlock(editor, "```relations\n```\n");
 			},
@@ -58,8 +58,8 @@ export default class RelationsPlugin extends Plugin implements PositionStore, Ed
 		// Same idea but with every option present and commented. Useful as a discovery
 		// aid — users can uncomment and edit the lines they want without consulting docs.
 		this.addCommand({
-			id: "insert-relations-block-full",
-			name: "Insert relations code block (with all options)",
+			id: "insert-block-full",
+			name: "Insert code block (with all options)",
 			editorCallback: (editor: Editor, _view: MarkdownView) => {
 				const block =
 					"```relations\n" +
@@ -216,7 +216,7 @@ export default class RelationsPlugin extends Plugin implements PositionStore, Ed
 			await leaf.setViewState({ type: VIEW_TYPE_RELATIONS, active: true });
 		}
 
-		workspace.revealLeaf(leaf);
+		await workspace.revealLeaf(leaf);
 	}
 }
 

@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, TFile, debounce } from "obsidian";
+import { ItemView, WorkspaceLeaf, debounce } from "obsidian";
 import { Core } from "cytoscape";
 import type RelationsPlugin from "./main";
 import { VIEW_TYPE_RELATIONS, GraphMode, RelationsGraph } from "./types";
@@ -75,11 +75,13 @@ export class RelationsView extends ItemView {
 		// Sticky across reloads since it writes to settings.
 		this.labelsBtn = toolbar.createEl("button", { text: "Labels" });
 		this.labelsBtn.title = "Show or hide note names under nodes";
-		this.labelsBtn.addEventListener("click", async () => {
-			this.plugin.settings.showNodeLabels = !this.plugin.settings.showNodeLabels;
-			await this.plugin.saveSettings();
-			this.updateLabelsButton();
-			this.render();
+		this.labelsBtn.addEventListener("click", () => {
+			void (async () => {
+				this.plugin.settings.showNodeLabels = !this.plugin.settings.showNodeLabels;
+				await this.plugin.saveSettings();
+				this.updateLabelsButton();
+				this.render();
+			})();
 		});
 		this.updateLabelsButton();
 

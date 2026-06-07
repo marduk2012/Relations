@@ -111,7 +111,7 @@ function buildPairAdjacency(
 function createOverlay(container: HTMLElement): SVGGElement {
 	container.querySelector("svg.family-connectors-svg")?.remove();
 
-	const svg = document.createElementNS(SVG_NS, "svg");
+	const svg = activeDocument.createElementNS(SVG_NS, "svg");
 	svg.classList.add("family-connectors-svg");
 	Object.assign(svg.style, {
 		position: "absolute",
@@ -124,7 +124,7 @@ function createOverlay(container: HTMLElement): SVGGElement {
 	});
 	container.appendChild(svg);
 
-	const g = document.createElementNS(SVG_NS, "g");
+	const g = activeDocument.createElementNS(SVG_NS, "g");
 	svg.appendChild(g);
 	return g;
 }
@@ -252,7 +252,7 @@ function onPositionChange(cy: Core, redraw: () => void): void {
 	cy.on("position", "node", () => {
 		if (scheduled) return;
 		scheduled = true;
-		requestAnimationFrame(() => {
+		window.requestAnimationFrame(() => {
 			scheduled = false;
 			redraw();
 		});
@@ -268,7 +268,7 @@ function enableSpouseDrag(
 
 	cy.on("grab", "node", (evt) => {
 		const node = evt.target;
-		const neighbors = pairAdj.get(node.id() as string);
+		const neighbors = pairAdj.get(node.id());
 		if (!neighbors?.size) {
 			partners = [];
 			return;
@@ -309,7 +309,7 @@ function addPath(
 	stroke: string,
 	strokeWidth: number,
 ): void {
-	const path = document.createElementNS(SVG_NS, "path");
+	const path = activeDocument.createElementNS(SVG_NS, "path");
 	path.setAttribute("d", d);
 	path.setAttribute("fill", "none");
 	path.setAttribute("stroke", stroke);
@@ -334,7 +334,7 @@ function addTextLabel(
 	fontSize: number,
 	onDblclick: (evt: MouseEvent) => void,
 ): void {
-	const group = document.createElementNS(SVG_NS, "g");
+	const group = activeDocument.createElementNS(SVG_NS, "g");
 	group.classList.add("family-connector-label");
 	// cursor: pointer and pointer-events: auto are in styles.css under
 	// .family-connector-label.
@@ -349,7 +349,7 @@ function addTextLabel(
 	const w = Math.max(20, text.length * charW + padX * 2);
 	const h = fontSize + padY * 2;
 
-	const bg = document.createElementNS(SVG_NS, "rect");
+	const bg = activeDocument.createElementNS(SVG_NS, "rect");
 	bg.setAttribute("x", String(x - w / 2));
 	bg.setAttribute("y", String(y - h / 2));
 	bg.setAttribute("width", String(w));
@@ -362,7 +362,7 @@ function addTextLabel(
 	bg.setAttribute("stroke-width", "1");
 	group.appendChild(bg);
 
-	const t = document.createElementNS(SVG_NS, "text");
+	const t = activeDocument.createElementNS(SVG_NS, "text");
 	t.setAttribute("x", String(x));
 	t.setAttribute("y", String(y));
 	t.setAttribute("text-anchor", "middle");
@@ -376,7 +376,7 @@ function addTextLabel(
 	group.addEventListener("dblclick", (e) => {
 		e.preventDefault();
 		e.stopPropagation();
-		onDblclick(e as MouseEvent);
+		onDblclick(e);
 	});
 
 	parent.appendChild(group);
@@ -393,7 +393,7 @@ function addHitZone(
 	d: string,
 	onDblclick: (evt: MouseEvent) => void,
 ): void {
-	const path = document.createElementNS(SVG_NS, "path");
+	const path = activeDocument.createElementNS(SVG_NS, "path");
 	path.setAttribute("d", d);
 	path.setAttribute("fill", "none");
 	path.setAttribute("stroke", "transparent");
@@ -404,7 +404,7 @@ function addHitZone(
 	path.addEventListener("dblclick", (e) => {
 		e.preventDefault();
 		e.stopPropagation();
-		onDblclick(e as MouseEvent);
+		onDblclick(e);
 	});
 	parent.appendChild(path);
 }

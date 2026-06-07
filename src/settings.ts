@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, ColorComponent, ButtonComponent } from "obsidian";
+import { App, PluginSettingTab, Setting, ButtonComponent } from "obsidian";
 import type RelationsPlugin from "./main";
 
 export class RelationsSettingTab extends PluginSettingTab {
@@ -33,7 +33,7 @@ export class RelationsSettingTab extends PluginSettingTab {
 			// the browser may not have laid out the new DOM yet, so writing
 			// scrollTop immediately can be clamped. requestAnimationFrame ensures
 			// the new content is measurable before we set the scroll position.
-			requestAnimationFrame(() => {
+			window.requestAnimationFrame(() => {
 				scrollContainer.scrollTop = savedScroll;
 			});
 		}
@@ -146,16 +146,25 @@ export class RelationsSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl).setName("Connection types").setHeading();
 		const help = containerEl.createDiv({ cls: "setting-item-description" });
-		help.innerHTML = `
-			<p>Each row is one relationship type, matched by frontmatter property name.</p>
-			<ul style="margin-top:4px">
-				<li><strong>Sym</strong> — symmetric: declaring on either note creates the relationship both ways.</li>
-				<li><strong>Pair</strong> — pull paired nodes very close (e.g. spouse, partner).</li>
-				<li><strong>Tree</strong> — when this type dominates a graph, lay it out top-down (e.g. family, parent).</li>
-				<li><strong>Gen</strong> — genealogy: this type counts as a bloodline edge in family-graph mode. Typically <code>parent</code>. Used to build generations and place children below their parents.</li>
-				<li><strong>Line</strong> — solid / dashed / dotted / double. Useful for marking "secret", "former", "rumored" or otherwise different-flavored relationships.</li>
-			</ul>
-		`;
+		help.createEl("p", { text: "Each row is one relationship type, matched by frontmatter property name." });
+		const helpList = help.createEl("ul", { cls: "relations-help-list" });
+		const addHelpItem = (label: string, body: string): void => {
+			const li = helpList.createEl("li");
+			li.createEl("strong", { text: label });
+			li.appendText(` — ${body}`);
+		};
+		addHelpItem("Sym", "symmetric: declaring on either note creates the relationship both ways.");
+		addHelpItem("Pair", "pull paired nodes very close (e.g. spouse, partner).");
+		addHelpItem("Tree", "when this type dominates a graph, lay it out top-down (e.g. family, parent).");
+		// "Gen" item has a <code> tag — built specially.
+		{
+			const li = helpList.createEl("li");
+			li.createEl("strong", { text: "Gen" });
+			li.appendText(" — genealogy: this type counts as a bloodline edge in family-graph mode. Typically ");
+			li.createEl("code", { text: "parent" });
+			li.appendText(". Used to build generations and place children below their parents.");
+		}
+		addHelpItem("Line", `solid / dashed / dotted / double. Useful for marking "secret", "former", "rumored" or otherwise different-flavored relationships.`);
 
 		const list = containerEl.createDiv();
 		this.renderTypeList(list);
@@ -186,13 +195,19 @@ export class RelationsSettingTab extends PluginSettingTab {
 		// -----------------------------------------------------------------
 		new Setting(containerEl).setName("Ring color").setHeading();
 		const ringHelp = containerEl.createDiv({ cls: "setting-item-description" });
-		ringHelp.innerHTML = `
-			<p>Color the outer ring of a node based on a frontmatter property. Set a property name,
-			then map specific values to colors. Notes whose value doesn't match any rule render
-			with the default ring.</p>
-			<p>Example: property <code>feelings</code>, rule <code>enemy → red</code>. A note with
-			<code>feelings: enemy</code> in its frontmatter renders with a red ring.</p>
-		`;
+		ringHelp.createEl("p", {
+			text: "Color the outer ring of a node based on a frontmatter property. Set a property name, then map specific values to colors. Notes whose value doesn't match any rule render with the default ring.",
+		});
+		{
+			const p = ringHelp.createEl("p");
+			p.appendText("Example: property ");
+			p.createEl("code", { text: "feelings" });
+			p.appendText(", rule ");
+			p.createEl("code", { text: "enemy → red" });
+			p.appendText(". A note with ");
+			p.createEl("code", { text: "feelings: enemy" });
+			p.appendText(" in its frontmatter renders with a red ring.");
+		}
 
 		new Setting(containerEl)
 			.setName("Property name")
@@ -235,14 +250,15 @@ export class RelationsSettingTab extends PluginSettingTab {
 		// -----------------------------------------------------------------
 		new Setting(containerEl).setName("Node badges").setHeading();
 		const badgeHelp = containerEl.createDiv({ cls: "setting-item-description" });
-		badgeHelp.innerHTML = `
-			<p>Show small badges around each node, driven by frontmatter properties. Each slot
-			displays the value of the named property as-is — an emoji, an abbreviation, a short
-			label, whatever the user types.</p>
-			<p>Notes without the configured property render no badge for that slot. Leave a
-			property name blank to disable the slot entirely. Badges respect the global
-			<em>Show node labels</em> setting — turn labels off and badges turn off with them.</p>
-		`;
+		badgeHelp.createEl("p", {
+			text: "Show small badges around each node, driven by frontmatter properties. Each slot displays the value of the named property as-is — an emoji, an abbreviation, a short label, whatever the user types.",
+		});
+		{
+			const p = badgeHelp.createEl("p");
+			p.appendText("Notes without the configured property render no badge for that slot. Leave a property name blank to disable the slot entirely. Badges respect the global ");
+			p.createEl("em", { text: "Show node labels" });
+			p.appendText(" setting — turn labels off and badges turn off with them.");
+		}
 
 		new Setting(containerEl)
 			.setName("Top-left icon property")
@@ -321,18 +337,22 @@ export class RelationsSettingTab extends PluginSettingTab {
 			const nameInput = row.createEl("input", { type: "text", cls: "relations-types-name" });
 			nameInput.value = rt.name;
 			nameInput.placeholder = "name";
-			nameInput.addEventListener("change", async () => {
-				this.plugin.settings.relationshipTypes[idx].name = nameInput.value.trim() || rt.name;
-				await this.plugin.saveSettings();
-				this.plugin.refreshGraphView();
+			nameInput.addEventListener("change", () => {
+				void (async () => {
+					this.plugin.settings.relationshipTypes[idx].name = nameInput.value.trim() || rt.name;
+					await this.plugin.saveSettings();
+					this.plugin.refreshGraphView();
+				})();
 			});
 
 			const colorInput = row.createEl("input", { type: "color", cls: "relations-types-color" });
 			colorInput.value = rt.color;
-			colorInput.addEventListener("change", async () => {
-				this.plugin.settings.relationshipTypes[idx].color = colorInput.value;
-				await this.plugin.saveSettings();
-				this.plugin.refreshGraphView();
+			colorInput.addEventListener("change", () => {
+				void (async () => {
+					this.plugin.settings.relationshipTypes[idx].color = colorInput.value;
+					await this.plugin.saveSettings();
+					this.plugin.refreshGraphView();
+				})();
 			});
 
 			const makeCheckbox = (
@@ -342,10 +362,12 @@ export class RelationsSettingTab extends PluginSettingTab {
 				const cb = row.createEl("input", { type: "checkbox", cls: "relations-types-cb" });
 				cb.checked = rt[key];
 				cb.title = title;
-				cb.addEventListener("change", async () => {
-					this.plugin.settings.relationshipTypes[idx][key] = cb.checked;
-					await this.plugin.saveSettings();
-					this.plugin.refreshGraphView();
+				cb.addEventListener("change", () => {
+					void (async () => {
+						this.plugin.settings.relationshipTypes[idx][key] = cb.checked;
+						await this.plugin.saveSettings();
+						this.plugin.refreshGraphView();
+					})();
 				});
 				return cb;
 			};
@@ -363,20 +385,24 @@ export class RelationsSettingTab extends PluginSettingTab {
 				o.value = opt;
 				if (rt.lineStyle === opt) o.selected = true;
 			}
-			lineSelect.addEventListener("change", async () => {
-				const v = lineSelect.value as "solid" | "dashed" | "dotted" | "double";
-				this.plugin.settings.relationshipTypes[idx].lineStyle = v;
-				await this.plugin.saveSettings();
-				this.plugin.refreshGraphView();
+			lineSelect.addEventListener("change", () => {
+				void (async () => {
+					const v = lineSelect.value as "solid" | "dashed" | "dotted" | "double";
+					this.plugin.settings.relationshipTypes[idx].lineStyle = v;
+					await this.plugin.saveSettings();
+					this.plugin.refreshGraphView();
+				})();
 			});
 
 			const removeBtn = row.createEl("button", { text: "✕", cls: "relations-types-remove" });
 			removeBtn.title = "Remove";
-			removeBtn.addEventListener("click", async () => {
-				this.plugin.settings.relationshipTypes.splice(idx, 1);
-				await this.plugin.saveSettings();
-				this.redisplay();
-				this.plugin.refreshGraphView();
+			removeBtn.addEventListener("click", () => {
+				void (async () => {
+					this.plugin.settings.relationshipTypes.splice(idx, 1);
+					await this.plugin.saveSettings();
+					this.redisplay();
+					this.plugin.refreshGraphView();
+				})();
 			});
 		});
 	}
@@ -408,30 +434,36 @@ export class RelationsSettingTab extends PluginSettingTab {
 			const valueInput = row.createEl("input", { type: "text", cls: "relations-types-name" });
 			valueInput.value = rule.value;
 			valueInput.placeholder = "e.g. enemy";
-			valueInput.addEventListener("change", async () => {
-				this.plugin.settings.ringColorRules[idx].value = valueInput.value;
-				await this.plugin.saveSettings();
-				this.plugin.graphCache.invalidate();
-				this.plugin.refreshGraphView();
+			valueInput.addEventListener("change", () => {
+				void (async () => {
+					this.plugin.settings.ringColorRules[idx].value = valueInput.value;
+					await this.plugin.saveSettings();
+					this.plugin.graphCache.invalidate();
+					this.plugin.refreshGraphView();
+				})();
 			});
 
 			const colorInput = row.createEl("input", { type: "color", cls: "relations-types-color" });
 			colorInput.value = rule.color;
-			colorInput.addEventListener("change", async () => {
-				this.plugin.settings.ringColorRules[idx].color = colorInput.value;
-				await this.plugin.saveSettings();
-				this.plugin.graphCache.invalidate();
-				this.plugin.refreshGraphView();
+			colorInput.addEventListener("change", () => {
+				void (async () => {
+					this.plugin.settings.ringColorRules[idx].color = colorInput.value;
+					await this.plugin.saveSettings();
+					this.plugin.graphCache.invalidate();
+					this.plugin.refreshGraphView();
+				})();
 			});
 
 			const removeBtn = row.createEl("button", { text: "✕", cls: "relations-types-remove" });
 			removeBtn.title = "Remove rule";
-			removeBtn.addEventListener("click", async () => {
-				this.plugin.settings.ringColorRules.splice(idx, 1);
-				await this.plugin.saveSettings();
-				this.plugin.graphCache.invalidate();
-				this.redisplay();
-				this.plugin.refreshGraphView();
+			removeBtn.addEventListener("click", () => {
+				void (async () => {
+					this.plugin.settings.ringColorRules.splice(idx, 1);
+					await this.plugin.saveSettings();
+					this.plugin.graphCache.invalidate();
+					this.redisplay();
+					this.plugin.refreshGraphView();
+				})();
 			});
 		});
 	}
@@ -451,7 +483,7 @@ export class RelationsSettingTab extends PluginSettingTab {
  */
 function findScrollContainer(start: HTMLElement): HTMLElement | null {
 	let el: HTMLElement | null = start;
-	while (el && el !== document.body) {
+	while (el && el !== activeDocument.body) {
 		const style = window.getComputedStyle(el);
 		const overflowY = style.overflowY;
 		const scrolls = overflowY === "auto" || overflowY === "scroll";
