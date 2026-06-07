@@ -110,9 +110,15 @@ export default class RelationsPlugin extends Plugin implements PositionStore, Ed
 	onunload(): void { /* views detach automatically */ }
 
 	async loadSettings(): Promise<void> {
-		const loaded = await this.loadData();
-		this.lockedLayouts = loaded && typeof loaded.lockedLayouts === "object" && loaded.lockedLayouts || {};
-		this.edgeLabels = loaded && typeof loaded.edgeLabels === "object" && loaded.edgeLabels || {};
+		const loaded = (await this.loadData()) as Record<string, unknown> | null;
+		const loadedLayouts = loaded?.lockedLayouts;
+		this.lockedLayouts = (loadedLayouts && typeof loadedLayouts === "object")
+			? loadedLayouts as Record<string, LockedLayout>
+			: {};
+		const loadedLabels = loaded?.edgeLabels;
+		this.edgeLabels = (loadedLabels && typeof loadedLabels === "object")
+			? loadedLabels as Record<string, string>
+			: {};
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
 		delete (this.settings as unknown as Record<string, unknown>).lockedLayouts;
 		delete (this.settings as unknown as Record<string, unknown>).edgeLabels;

@@ -359,7 +359,7 @@ export function resolveFamilyMode(parsed: Record<string, unknown>): "graph" | "t
 function parseOptions(source: string): ParsedOptions {
 	let parsed: Record<string, unknown> = {};
 	try {
-		const raw = parseYaml(source);
+		const raw: unknown = parseYaml(source);
 		if (raw && typeof raw === "object") {
 			parsed = raw as Record<string, unknown>;
 		}

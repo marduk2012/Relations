@@ -411,9 +411,9 @@ export function resolveFrontmatterString(
 	const prop = propertyName?.trim();
 	if (!prop) return undefined;
 	if (!frontmatter) return undefined;
-	const raw = frontmatter[prop];
+	const raw: unknown = frontmatter[prop];
 	if (raw == null) return undefined;
-	const first = Array.isArray(raw) ? raw[0] : raw;
+	const first: unknown = Array.isArray(raw) ? raw[0] : raw;
 	if (first == null) return undefined;
 	const value = String(first).trim();
 	if (!value) return undefined;
@@ -441,9 +441,9 @@ export function resolveRingColor(
 	if (!prop) return undefined;
 	if (!settings.ringColorRules || settings.ringColorRules.length === 0) return undefined;
 	if (!frontmatter) return undefined;
-	const raw = frontmatter[prop];
+	const raw: unknown = frontmatter[prop];
 	if (raw == null) return undefined;
-	const first = Array.isArray(raw) ? raw[0] : raw;
+	const first: unknown = Array.isArray(raw) ? raw[0] : raw;
 	if (first == null) return undefined;
 	const value = String(first).trim();
 	if (!value) return undefined;
@@ -473,10 +473,10 @@ function resolveImage(
 ): string | null {
 	const fm = cache?.frontmatter;
 	if (!fm) return null;
-	const raw = fm[settings.imageProperty];
+	const raw: unknown = fm[settings.imageProperty];
 	if (raw == null) return null;
 
-	const value = Array.isArray(raw) ? raw[0] : raw;
+	const value: unknown = Array.isArray(raw) ? raw[0] : raw;
 	if (typeof value !== "string") return null;
 	const v = value.trim();
 	if (!v) return null;

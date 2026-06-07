@@ -1,4 +1,4 @@
-import { Core } from "cytoscape";
+import cytoscape, { Core } from "cytoscape";
 import { RelationsGraph } from "./types";
 import { computeEffectiveParents } from "./family-parenting";
 
@@ -267,7 +267,7 @@ function enableSpouseDrag(
 	let partners: Array<{ id: string; offsetX: number; offsetY: number }> = [];
 
 	cy.on("grab", "node", (evt) => {
-		const node = evt.target;
+		const node = evt.target as cytoscape.NodeSingular;
 		const neighbors = pairAdj.get(node.id());
 		if (!neighbors?.size) {
 			partners = [];
@@ -289,7 +289,8 @@ function enableSpouseDrag(
 
 	cy.on("drag", "node", (evt) => {
 		if (partners.length === 0) return;
-		const np = evt.target.position();
+		const dragged = evt.target as cytoscape.NodeSingular;
+		const np = dragged.position();
 		for (const p of partners) {
 			cy.getElementById(p.id).position({
 				x: np.x + p.offsetX,

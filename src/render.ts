@@ -237,7 +237,7 @@ export function renderGraph(opts: RenderOptions): Core {
 	// Stash on node data so the family-graph layout (which reads from the cy instance,
 	// not from `graph`) can access it cheaply via `node.data("labelWidth")`.
 	for (const el of elements) {
-		const id = (el.data as { id?: string }).id;
+		const id = el.data.id;
 		if (id !== undefined && labelWidths.has(id)) {
 			(el.data as Record<string, unknown>).labelWidth = labelWidths.get(id);
 		}
@@ -370,8 +370,8 @@ export function renderGraph(opts: RenderOptions): Core {
 	// background-image at all — otherwise Cytoscape attempts to parse an empty URL
 	// and throws.
 	cy.nodes().forEach((node) => {
-		const img = node.data("image") as string;
-		if (img && typeof img === "string") {
+		const img = node.data("image");
+		if (typeof img === "string" && img) {
 			node.style({
 				"background-image": img,
 				"background-fit": "cover",
@@ -447,7 +447,8 @@ export function renderGraph(opts: RenderOptions): Core {
 
 	cy.on("tap", "node", (evt) => {
 		void (async () => {
-			const path = evt.target.id();
+			const node = evt.target as cytoscape.NodeSingular;
+			const path = node.id();
 			const file = app.vault.getAbstractFileByPath(path);
 			if (file instanceof TFile) {
 				await app.workspace.getLeaf(false).openFile(file);
@@ -456,10 +457,11 @@ export function renderGraph(opts: RenderOptions): Core {
 	});
 
 	cy.on("cxttap", "node", (evt) => {
-		const path = evt.target.id();
+		const node = evt.target as cytoscape.NodeSingular;
+		const path = node.id();
 		const file = app.vault.getAbstractFileByPath(path);
 		if (!(file instanceof TFile)) return;
-		const orig = evt.originalEvent as MouseEvent;
+		const orig = evt.originalEvent;
 		const menu = new Menu();
 		menu.addItem((i) => i.setTitle("Open").setIcon("file").onClick(async () => {
 			await app.workspace.getLeaf(false).openFile(file);
@@ -479,11 +481,11 @@ export function renderGraph(opts: RenderOptions): Core {
 	// label key would be ambiguous.
 	if (opts.editableLabels && labelStore) {
 		cy.on("dblclick", "edge", (evt) => {
-			const edge = evt.target;
-			const type = edge.data("type") as string;
+			const edge = evt.target as cytoscape.EdgeSingular;
+			const type = String(edge.data("type"));
 			if (type === INFORMAL_PARTNERSHIP_TYPE) return;
-			const source = edge.data("source") as string;
-			const target = edge.data("target") as string;
+			const source = String(edge.data("source"));
+			const target = String(edge.data("target"));
 			const symmetric = edge.data("symmetric") === "true";
 			const genealogy = edge.data("genealogy") === "true";
 			// Genealogy edges have been inverted for display (source=parent,
@@ -495,7 +497,7 @@ export function renderGraph(opts: RenderOptions): Core {
 			const key = edgeLabelKey(keySource, type, keyTarget, symmetric);
 			const current = labelStore.getLabel(key) ?? "";
 
-			const orig = evt.originalEvent as MouseEvent;
+			const orig = evt.originalEvent;
 			openEdgeLabelEditor({
 				container,
 				clientX: orig.clientX,
