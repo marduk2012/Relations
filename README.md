@@ -1,5 +1,8 @@
 <div align="center">
 
+# Disclaimer
+This fork of the orignal mod is edited using Claude Code, to add small changes and features I wanted. 
+
 # Relations
 
 **See how your notes connect.**
